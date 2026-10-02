@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import * as T from 'three';
+import {PizzaSlice} from '../src/pizza/PizzaSlice';
+import {PhysicsWorld} from '../src/physics/PhysicsWorld';
+import {CheeseSystem} from '../src/cheese/CheeseSystem';
+import {OrbitCamera} from '../src/interaction/OrbitCamera';
+import {DragController} from '../src/interaction/DragController';
+const noop=()=>{},element={classList:{add:noop,remove:noop,toggle:noop},setAttribute:noop};
+(globalThis as any).window={addEventListener:noop};(globalThis as any).document={addEventListener:noop,querySelector:()=>element};
+const captured=new Set<number>();const canvas:any={...element,addEventListener:noop,focus:noop,getBoundingClientRect:()=>({left:0,top:0,width:1000,height:800}),setPointerCapture:(id:number)=>captured.add(id),hasPointerCapture:(id:number)=>captured.has(id),releasePointerCapture:(id:number)=>captured.delete(id)};
+const mats:any=Object.fromEntries(['cheese','underside','crumb','crust','dough','sauce','basil','strand'].map(k=>[k,new T.MeshPhysicalMaterial()])),slices=Array.from({length:6},(_,i)=>new PizzaSlice(i,mats)),scene=new T.Scene();slices.forEach(s=>scene.add(s.group));const cheese=new CheeseSystem(slices,scene,mats.strand),world=new PhysicsWorld(slices,cheese),camera=new T.PerspectiveCamera(35,1.25,.1,70),orbit=new OrbitCamera(canvas,camera,world),controller=new DragController(canvas,camera,world,noop,orbit);scene.updateMatrixWorld(true);
+const event=(id:number,x:number,y:number,extra={})=>({pointerId:id,clientX:x,clientY:y,button:0,shiftKey:false,altKey:false,type:'pointerup',preventDefault:noop,...extra} as PointerEvent);
+const p=slices[1].group.position.clone().add(new T.Vector3(0,.2,0)).project(camera),x=(p.x*.5+.5)*1000,y=(-p.y*.5+.5)*800;
+controller.down(event(1,x,y));assert(world.drag);assert.equal(orbit.pointers.size,0);controller.move(event(1,950,50));assert(world.drag,'slice drag switched to orbit');assert.equal(orbit.pointers.size,0);
+controller.togglePin();controller.up(event(1,950,50));assert(world.drag?.body.held);assert.equal(controller.pointerId,null);
+const held=world.drag!.target.clone();controller.down(event(2,5,5));assert(orbit.pointers.has(2));controller.move(event(2,100,80));for(let i=0;i<60;i++)orbit.update(1/60);assert(world.drag!.target.equals(held),'orbit moved the held physics target');controller.up(event(2,100,80));controller.togglePin();assert.equal(world.drag,null);
+controller.down(event(3,x,y,{button:2}));assert(orbit.pointers.has(3));assert.equal(world.drag,null);controller.up(event(3,x,y,{button:2}));
+controller.down(event(4,5,5));controller.down(event(5,100,5));const radius=orbit.desiredRadius;controller.move(event(5,220,5));assert(orbit.desiredRadius<radius,'pinch zoom failed');controller.up(event(4,5,5));controller.up(event(5,220,5));assert.equal(orbit.pointers.size,0);assert.equal(captured.size,0);console.log('PASS: pointer ownership, held-slice orbit, right drag, pinch zoom, and capture cleanup.');
+
+world.reset();orbit.reset();for(let i=0;i<120;i++)orbit.update(1/60);scene.updateMatrixWorld(true);
+const touchPoint=slices[1].group.position.clone().add(new T.Vector3(0,.2,0)).project(camera),tx=(touchPoint.x*.5+.5)*1000,ty=(-touchPoint.y*.5+.5)*800;
+controller.down(event(10,tx,ty,{pointerType:'touch'}));assert(world.drag);const frozenTarget=world.drag!.target.clone();controller.down(event(11,tx+80,ty,{pointerType:'touch'}));assert.equal(orbit.pointers.size,2);
+const beforePinch=orbit.desiredRadius;controller.move(event(11,tx+180,ty,{pointerType:'touch'}));assert(orbit.desiredRadius<beforePinch);assert(world.drag!.target.equals(frozenTarget));controller.up(event(10,tx,ty,{pointerType:'touch'}));controller.up(event(11,tx+180,ty,{pointerType:'touch'}));assert.equal(world.drag,null);assert.equal(captured.size,0);
+console.log('PASS: two-finger camera gesture freezes the local grab target, then releases cleanly.');

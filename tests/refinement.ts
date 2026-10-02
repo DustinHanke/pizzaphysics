@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import * as T from 'three';
+import {PizzaSlice} from '../src/pizza/PizzaSlice';
+import {PhysicsWorld} from '../src/physics/PhysicsWorld';
+import {CheeseSystem} from '../src/cheese/CheeseSystem';
+import {pullEnvelope} from '../src/interaction/DragController';
+import {OrbitCamera} from '../src/interaction/OrbitCamera';
+import {DOUGH_TOP,DOUGH_BOTTOM} from '../src/pizza/surface';
+const materials:any=Object.fromEntries(['cheese','underside','crumb','crust','dough','sauce','basil','strand'].map(k=>[k,new T.MeshPhysicalMaterial()]));
+const slices=Array.from({length:6},(_,i)=>new PizzaSlice(i,materials)),scene=new T.Scene(),cheese=new CheeseSystem(slices,scene,materials.strand),world=new PhysicsWorld(slices,cheese),body=slices[1],report:any={};
+const restingNeighbors=slices.filter(s=>s!==body).map(s=>({slice:s,home:s.home.clone()}));
+assert((DOUGH_TOP-DOUGH_BOTTOM)*60<2,'center dough is too thick');
+body.detached=body.held=true;body.hasCheese=true;
+const local=new T.Vector3(Math.cos(body.theta)*2.4-body.home.x,.4,Math.sin(body.theta)*2.4-body.home.z),start=body.worldPoint(local,new T.Vector3()),target=start.clone();world.drag={body,local,target};
+for(let i=0;i<240;i++){target.copy(start).add(new T.Vector3(Math.cos(body.theta)*2.3,2,Math.sin(body.theta)*2.3).multiplyScalar(Math.min(1,i/120)));world.step(1/120);}
+for(let i=0;i<360;i++)world.step(1/120);
+const crust=body.worldPoint(local,new T.Vector3()),tip=body.cloth.points[0],neutral=body.cloth.rest[0].clone().applyQuaternion(body.group.quaternion).add(body.group.position);
+report.stationary={sag:neutral.y-tip.y,crustError:crust.distanceTo(target),tipBelowCrust:crust.y-tip.y,shapeSag:-body.cloth.offsets[0].y};
+assert(report.stationary.sag>.25,'actual held crust must leave a sagging center');assert(report.stationary.crustError<.3,'crust escaped the hand');
+report.stationary.neighborDrift=Math.max(...restingNeighbors.map(({slice,home})=>slice.group.position.distanceTo(home)));
+assert(report.stationary.neighborDrift<.005,'grabbing one slice must not push the rest of the pizza outward');
+world.reset();cheese.collisions=undefined;cheese.spawn(body);const initial=cheese.initial,stages:number[]=[],failLengths:{primary:boolean,length:number}[]=[];
+for(let i=0;i<=960;i++){const d=i/960*5;body.group.position.copy(body.home).add(new T.Vector3(0,d,0));const before=new Set(cheese.strands.filter(s=>!s.broken));cheese.update(1/120);for(const s of before)if(s.broken)failLengths.push({primary:s.primary,length:s.length});if(i%120===0)stages.push(cheese.metrics.active);if(i===720)assert(cheese.metrics.active<=3,'224 mm pull still has too many connections');}
+assert.equal(cheese.metrics.active,0,'cheese never completely separates');assert(failLengths.some(s=>s.primary)&&failLengths.some(s=>!s.primary));assert(Math.min(...failLengths.filter(s=>s.primary).map(s=>s.length))>Math.min(...failLengths.filter(s=>!s.primary).map(s=>s.length)),'thin fibers should yield first');
+report.pull={initial,stages,failLengths};
+world.reset();cheese.collisions=undefined;cheese.spawn(body);const strand=cheese.strands.find(s=>s.primary)!;strand.update(1/120);const fixed=(strand.yieldLength+strand.hardLimit)*.5;body.group.position.y=fixed;for(let i=0;i<1500&&!strand.broken;i++)strand.update(1/120);assert(strand.broken&&strand.damage>=1,'sustained yielded cheese should accumulate damage');report.sustainedDamage=strand.damage;
+assert(pullEnvelope(.1)>.099);assert(pullEnvelope(100)<4.601);assert(pullEnvelope(6)>pullEnvelope(3));report.pullEnvelope=pullEnvelope(100);
+(globalThis as any).window={addEventListener(){}};const canvas:any={addEventListener(){}};const camera=new T.PerspectiveCamera(35,4/3,.1,70),orbit=new OrbitCamera(canvas,camera,world);world.drag={body,local,target};body.group.position.copy(body.home).add(new T.Vector3(4,3,0));const radius=orbit.radius;
+for(let i=0;i<240;i++)orbit.update(1/60);assert(orbit.target.distanceTo(new T.Vector3(0,.25,0))<=.421);assert(orbit.frameRadius>=0&&orbit.frameRadius<=1.65);assert(camera.position.distanceTo(orbit.target)>=radius-.001);report.camera={targetShift:orbit.target.distanceTo(new T.Vector3(0,.25,0)),outwardOnly:orbit.frameRadius};
+console.log(JSON.stringify({passed:true,report},null,2));
