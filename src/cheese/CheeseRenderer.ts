@@ -2,7 +2,7 @@ import * as T from 'three';
 
 // All active cheese connections share one dynamic ribbon buffer per material.
 // The shallow, three-column cross section catches light without reading as a pipe.
-const SEGMENTS=20, ACROSS=3, CAPACITY=128, VERTS=(SEGMENTS+1)*ACROSS;
+const SEGMENTS=20, ACROSS=3, CAPACITY=128, SURFACE=(SEGMENTS+1)*ACROSS, VERTS=SURFACE*2, INDICES=SEGMENTS*(ACROSS-1)*12+SEGMENTS*12+(ACROSS-1)*12;
 const batches=new WeakMap<T.Material,RibbonBatch>();
 const liveBatches=new Set<RibbonBatch>();
 const tangent=new T.Vector3(),widthAxis=new T.Vector3(),surfaceNormal=new T.Vector3(),up=new T.Vector3(0,1,0),fallback=new T.Vector3(1,0,0),point=new T.Vector3(),before=new T.Vector3(),after=new T.Vector3();
@@ -15,7 +15,11 @@ class RibbonBatch {
   for(let slot=0;slot<CAPACITY;slot++){
    this.free.push(CAPACITY-1-slot);const base=slot*VERTS;
    for(let i=0;i<=SEGMENTS;i++)for(let j=0;j<ACROSS;j++){const v=base+i*ACROSS+j;uv[v*2]=j/(ACROSS-1);uv[v*2+1]=i/SEGMENTS;
-    if(i<SEGMENTS&&j<ACROSS-1){indices.push(v,v+ACROSS,v+1,v+1,v+ACROSS,v+ACROSS+1);}}
+    if(i<SEGMENTS&&j<ACROSS-1){indices.push(v,v+ACROSS,v+1,v+1,v+ACROSS,v+ACROSS+1, v+SURFACE,v+1+SURFACE,v+ACROSS+SURFACE,v+1+SURFACE,v+ACROSS+1+SURFACE,v+ACROSS+SURFACE);}}
+   // Reverse every top boundary edge to join it to the underside.
+   const seal=(a:number,b:number)=>indices.push(b,a,a+SURFACE,b,a+SURFACE,b+SURFACE);
+   for(let i=0;i<SEGMENTS;i++){seal(base+i*ACROSS,base+(i+1)*ACROSS);seal(base+(i+1)*ACROSS+ACROSS-1,base+i*ACROSS+ACROSS-1);}
+   for(let j=0;j<ACROSS-1;j++){seal(base+j+1,base+j);seal(base+SEGMENTS*ACROSS+j,base+SEGMENTS*ACROSS+j+1);}
   }
   const g=new T.BufferGeometry();g.setAttribute('position',new T.BufferAttribute(this.positions,3).setUsage(T.DynamicDrawUsage));g.setAttribute('normal',new T.BufferAttribute(this.normals,3).setUsage(T.DynamicDrawUsage));g.setAttribute('uv',new T.BufferAttribute(uv,2).setUsage(T.DynamicDrawUsage));g.setAttribute('sssThickness',new T.BufferAttribute(this.thickness,1).setUsage(T.DynamicDrawUsage));g.setIndex(indices);
   this.mesh=new T.Mesh(g,material);this.mesh.name='Batched torn mozzarella web';this.mesh.frustumCulled=false;this.mesh.castShadow=this.mesh.receiveShadow=true;this.mesh.visible=false;scene.add(this.mesh);liveBatches.add(this);
@@ -27,12 +31,12 @@ class RibbonBatch {
  flush(){const g=this.mesh.geometry;this.mesh.visible=this.refs>0;
   if(this.dirtyMax<0)return;
   for(const value of Object.values(g.attributes)){const attr=value as T.BufferAttribute;attr.addUpdateRange(this.dirtyMin*VERTS*attr.itemSize,(this.dirtyMax-this.dirtyMin+1)*VERTS*attr.itemSize);attr.needsUpdate=true;}
-  let last=-1;for(const slot of this.active)last=Math.max(last,slot);g.setDrawRange(0,(last+1)*SEGMENTS*(ACROSS-1)*6);
+  let last=-1;for(const slot of this.active)last=Math.max(last,slot);g.setDrawRange(0,(last+1)*INDICES);
   this.dirtyMin=Infinity;this.dirtyMax=-1;
  }
 }
 
-/** Camera-independent, double-sided, tapered sheet strand. Never a hollow tube. */
+/** Camera-independent, closed, shallow tapered ribbon volume. Never a hollow tube. */
 export class CheeseRenderer {
  mesh:T.Mesh;curve:T.CatmullRomCurve3;positions:Float32Array;thicknesses:Float32Array;private batch:RibbonBatch;private slot:number;private uvA:T.Vector2;private uvB:T.Vector2;
  constructor(scene:T.Scene,material:T.MeshPhysicalMaterial,points:T.Vector3[],uvAnchors?:[T.Vector2,T.Vector2]){
@@ -55,13 +59,17 @@ export class CheeseRenderer {
     const u=j/(ACROSS-1)*2-1,idx=base+i*ACROSS+j,camber=(1-u*u)*width*.25,materialU=T.MathUtils.lerp(this.uvA.x,this.uvB.x,t)+widthAxis.x*u*width/5.3,materialV=T.MathUtils.lerp(this.uvA.y,this.uvB.y,t)+widthAxis.z*u*width/5.3;
     // Carry the actual mozzarella-pool coordinates through the pull. A full
     // 0–1 UV per bridge had magnified one whole-pizza texture over a few cm.
-    this.batch.uvs[idx*2]=materialU;this.batch.uvs[idx*2+1]=materialV;
-    this.positions[idx*3]=point.x+widthAxis.x*u*width+surfaceNormal.x*camber;
-    this.positions[idx*3+1]=point.y+widthAxis.y*u*width+surfaceNormal.y*camber;
-    this.positions[idx*3+2]=point.z+widthAxis.z*u*width+surfaceNormal.z*camber;
-    this.thicknesses[idx]=T.MathUtils.clamp(width/.035,.025,1);
-    const nx=surfaceNormal.x-widthAxis.x*u*.2,ny=surfaceNormal.y-widthAxis.y*u*.2,nz=surfaceNormal.z-widthAxis.z*u*.2,nl=Math.hypot(nx,ny,nz)||1;
-    this.batch.normals[idx*3]=nx/nl;this.batch.normals[idx*3+1]=ny/nl;this.batch.normals[idx*3+2]=nz/nl;
+    const halfThickness=Math.max(.000025,width*.07);
+    for(let layer=0;layer<2;layer++){
+     const vertex=idx+layer*SURFACE,side=layer===0?1:-1,h=camber+side*halfThickness;
+     this.batch.uvs[vertex*2]=materialU;this.batch.uvs[vertex*2+1]=materialV;
+     this.positions[vertex*3]=point.x+widthAxis.x*u*width+surfaceNormal.x*h;
+     this.positions[vertex*3+1]=point.y+widthAxis.y*u*width+surfaceNormal.y*h;
+     this.positions[vertex*3+2]=point.z+widthAxis.z*u*width+surfaceNormal.z*h;
+     this.thicknesses[vertex]=T.MathUtils.clamp(width/.035,.025,1);
+     const nx=surfaceNormal.x-widthAxis.x*u*.2,ny=surfaceNormal.y-widthAxis.y*u*.2,nz=surfaceNormal.z-widthAxis.z*u*.2,nl=Math.hypot(nx,ny,nz)||1;
+     this.batch.normals[vertex*3]=side*nx/nl;this.batch.normals[vertex*3+1]=side*ny/nl;this.batch.normals[vertex*3+2]=side*nz/nl;
+    }
    }
   }
  }

@@ -109,7 +109,7 @@ export class DoughCloth {
   }
   // The sheet transfers its load to the crust even after release, not only during a center grab.
   {const pinched=grab&&Math.hypot(grab.local.x+this.body.home.x,grab.local.z+this.body.home.z)<2.05;
-   delta.copy(this.rootReaction).multiplyScalar((pinched?.09:this.meanMass/this.body.crustMass)/dt).clampLength(0,dt*(pinched?54:2));this.body.velocity.add(delta);
+   delta.copy(this.rootReaction).multiplyScalar((this.meanMass/this.body.crustMass)/dt).clampLength(0,dt*(pinched?54:2));this.body.velocity.add(delta);
    delta.copy(this.rootTorque).multiplyScalar((pinched?.006:this.meanMass*this.body.inverseInertia)/dt).clampLength(0,dt*3);this.body.angularVelocity.add(delta);
   }
   this.limitStretch();this.cache();

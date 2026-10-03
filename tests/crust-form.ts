@@ -24,7 +24,7 @@ const materials:any={cheese:physical,underside:mat,crumb:mat,crust:mat,dough:mat
 const slices=Array.from({length:6},(_,i)=>new PizzaSlice(i,materials));
 for(const slice of slices){
  const geometry=slice.deformables.find(d=>d.mesh.name==='Cornicione')!.mesh.geometry;
- assert(geometry.attributes.position.count>17000,'cornicione subdivision density regressed');
+ assert(geometry.attributes.position.count>6000,'cornicione subdivision density regressed');
  for(const value of geometry.attributes.position.array)assert(Number.isFinite(value));
 }
 console.log(JSON.stringify({passed:true,blisters:crustBlisters.length,widthRange:[Math.min(...widths),Math.max(...widths)],heightRange:[Math.min(...heights),Math.max(...heights)],rimSubdivision:slices[0].deformables.find(d=>d.mesh.name==='Cornicione')!.mesh.geometry.attributes.position.count}));

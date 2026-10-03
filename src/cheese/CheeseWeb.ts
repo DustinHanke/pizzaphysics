@@ -17,19 +17,38 @@ export class CheeseMembrane {
   const coords:number[]=[];for(let i=0;i<=ROWS;i++)for(let j=0;j<=COLS;j++)coords.push(j/COLS,i/ROWS);this.coordinates=new Float32Array(coords);this.count=coords.length/2;
   const holeCount=5+Math.floor(rand(seed+319)*7);
   for(let i=0;i<holeCount;i++)this.holes.push({u:.13+rand(seed+i*11+1)*.74,v:.12+rand(seed+i*13+2)*.76,rx:.025+rand(seed+i*17+3)*.065,ry:.035+rand(seed+i*19+4)*.095,phase:rand(seed+i*23+5)*6.28,birth:rand(seed+i*29+6)*.56});
-  this.positions=new Float32Array(this.count*2*3);this.thicknesses=new Float32Array(this.count*2);this.indices=new Uint16Array(ROWS*COLS*2*2*3);
+  this.positions=new Float32Array(this.count*2*3);this.thicknesses=new Float32Array(this.count*2);this.indices=new Uint16Array(ROWS*COLS*48);
   const uv=this.uvs=new Float32Array(this.count*2*2);const g=new T.BufferGeometry();g.setAttribute('position',new T.BufferAttribute(this.positions,3).setUsage(T.DynamicDrawUsage));g.setAttribute('normal',new T.BufferAttribute(new Float32Array(this.positions.length),3).setUsage(T.DynamicDrawUsage));g.setAttribute('uv',new T.BufferAttribute(uv,2).setUsage(T.DynamicDrawUsage));g.setAttribute('sssThickness',new T.BufferAttribute(this.thicknesses,1).setUsage(T.DynamicDrawUsage));g.setIndex(new T.BufferAttribute(this.indices,1).setUsage(T.DynamicDrawUsage));
   this.mesh=new T.Mesh(g,material);this.mesh.name='Perforated mozzarella fragment';this.mesh.frustumCulled=false;this.mesh.castShadow=this.mesh.receiveShadow=true;this.mesh.renderOrder=2;scene.add(this.mesh);
  }
  private insideHole(u:number,v:number){for(const h of this.holes){const open=T.MathUtils.smoothstep(this.tear,h.birth,h.birth+.42),growth=.16+1.70*open,rx=h.rx*growth,ry=h.ry*growth,dx=(u-h.u)/rx,dy=(v-h.v)/ry,a=Math.atan2(dy,dx),edge=1+.20*Math.sin(a*3+h.phase)+.10*Math.sin(a*7-h.phase)+.045*Math.sin(a*11+h.phase*.7);if(Math.hypot(dx,dy)<edge)return true;}return false;}
  private rebuildTopology(){
-  let k=0;const baseIndex=(a:number,b:number,c:number)=>{this.indices[k++]=a;this.indices[k++]=b;this.indices[k++]=c;};
+  let k=0;const triangles:number[][]=[];
   for(let i=0;i<ROWS;i++)for(let j=0;j<COLS;j++){
    const a=i*(COLS+1)+j,b=a+1,c=a+COLS+1,d=c+1;
-   const tris=[[a,c,b],[b,c,d]];for(const tri of tris){const u=(this.coordinates[tri[0]*2]+this.coordinates[tri[1]*2]+this.coordinates[tri[2]*2])/3,v=(this.coordinates[tri[0]*2+1]+this.coordinates[tri[1]*2+1]+this.coordinates[tri[2]*2+1])/3,keep=!this.insideHole(u,v);
-    if(keep){baseIndex(tri[0],tri[1],tri[2]);baseIndex(tri[0]+this.count,tri[2]+this.count,tri[1]+this.count);}else{baseIndex(tri[0],tri[0],tri[0]);baseIndex(tri[0]+this.count,tri[0]+this.count,tri[0]+this.count);}
+   for(const tri of [[a,c,b],[b,c,d]]){const u=(this.coordinates[tri[0]*2]+this.coordinates[tri[1]*2]+this.coordinates[tri[2]*2])/3,v=(this.coordinates[tri[0]*2+1]+this.coordinates[tri[1]*2+1]+this.coordinates[tri[2]*2+1])/3;if(!this.insideHole(u,v))triangles.push(tri);}
+  }
+  // A hole may leave two islands touching at only one vertex. Remove the
+  // smaller local fan before extrusion so their vertical walls never share
+  // a nonmanifold edge. Runs only when the discrete tear bucket changes.
+  const removed=new Set<number>();let changed=true;
+  while(changed){changed=false;const incident=Array.from({length:this.count},()=>[] as number[]);
+   triangles.forEach((tri,id)=>{if(!removed.has(id))for(const v of tri)incident[v].push(id);});
+   for(let vertex=0;vertex<this.count;vertex++){
+    const pending=new Set(incident[vertex].filter(id=>!removed.has(id))),fans:number[][]=[];
+    while(pending.size){const first=pending.values().next().value!,fan=[first];pending.delete(first);
+     for(let i=0;i<fan.length;i++)for(const id of pending)if(triangles[id].some(v=>v!==vertex&&triangles[fan[i]].includes(v))){fan.push(id);pending.delete(id);}
+     fans.push(fan);
+    }
+    if(fans.length>1){fans.sort((a,b)=>b.length-a.length);for(const fan of fans.slice(1))for(const id of fan)removed.add(id);changed=true;}
    }
   }
+  const boundary=new Map<number,[number,number]>(),baseIndex=(a:number,b:number,c:number)=>{this.indices[k++]=a;this.indices[k++]=b;this.indices[k++]=c;};
+  const edge=(a:number,b:number)=>{const key=Math.min(a,b)*this.count+Math.max(a,b);if(boundary.has(key))boundary.delete(key);else boundary.set(key,[a,b]);};
+  triangles.forEach((tri,id)=>{if(removed.has(id))return;baseIndex(tri[0],tri[1],tri[2]);baseIndex(tri[0]+this.count,tri[2]+this.count,tri[1]+this.count);edge(tri[0],tri[1]);edge(tri[1],tri[2]);edge(tri[2],tri[0]);});
+  // Seal both the outer contour and every newly exposed hole boundary.
+  for(const [a,b] of boundary.values()){baseIndex(b,a,a+this.count);baseIndex(b,a+this.count,b+this.count);}
+  this.indices.fill(0,k);this.mesh.geometry.setDrawRange(0,k);
   this.mesh.geometry.index!.needsUpdate=true;
  }
  render(fade:number,collisions?:CollisionWorld){

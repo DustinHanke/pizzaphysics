@@ -11,7 +11,7 @@ setMozzarellaSeed(7123);const changedPools=JSON.stringify(pools);assert.notEqual
 setMozzarellaSeed(85);setMozzarellaSeed(7123);assert.equal(JSON.stringify(pools),changedPools,'same seed must reproduce placement');setMozzarellaSeed(0);assert.equal(JSON.stringify(pools),originalPools);
 let previousCoverage=-1,previousPopulation=-1;
 for(const amount of [50,65,100,160,200]){
- setMozzarellaAmount(amount);let hits=0,total=0;for(let x=-2.1;x<=2.1;x+=.04)for(let z=-2.1;z<=2.1;z+=.04)if(Math.hypot(x,z)<2.1){total++;if(cheeseField(x,z)>=CHEESE_EDGE)hits++;}
+ setMozzarellaAmount(amount);for(const slice of slices)slice.rebuildMozzarella();let hits=0,total=0;for(let x=-2.1;x<=2.1;x+=.04)for(let z=-2.1;z<=2.1;z+=.04)if(Math.hypot(x,z)<2.1){total++;if(cheeseField(x,z)>=CHEESE_EDGE)hits++;}
  const coverage=hits/total,population=mozzarellaPopulation();assert(coverage>previousCoverage);assert(population>previousPopulation);assert(coverage<.85,'extra mozzarella formed a blanket');previousCoverage=coverage;previousPopulation=population;
  let count=0,branches=0,sheets=0,strength=0,n=0;
  const system=new CheeseSystem(slices,scene,materials.strand);

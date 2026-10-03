@@ -3,6 +3,7 @@ import * as T from 'three';
 import { PizzaSlice } from '../pizza/PizzaSlice';
 import { rimShape } from '../pizza/surface';
 const a=new T.Vector3(),b=new T.Vector3(),axis=new T.Vector3(),separation=new T.Vector3(),relative=new T.Vector3(),contact=new T.Vector3(),arm=new T.Vector3(),spin=new T.Vector3(),bestNormal=new T.Vector3(),sweepNormal=new T.Vector3(),sweepEnd=new T.Vector3(),sweepMotion=new T.Vector3(),shiftX=new T.Vector3(),shiftY=new T.Vector3();
+function segmentIntersects(box:T.Box3,point:T.Vector3,previous:T.Vector3,radius:number){return Math.max(point.x,previous.x)>=box.min.x-radius&&Math.min(point.x,previous.x)<=box.max.x+radius&&Math.max(point.y,previous.y)>=box.min.y-radius&&Math.min(point.y,previous.y)<=box.max.y+radius&&Math.max(point.z,previous.z)>=box.min.z-radius&&Math.min(point.z,previous.z)<=box.max.z+radius;}
 export class ConvexProxy {
  bodyBounds?:T.Box3;patchBounds?:T.Box3;
  bindings:ReturnType<PizzaSlice['cloth']['bind']>[]=[];directionCount=0;vertices:T.Vector3[];normals:T.Vector3[];directions:T.Vector3[];center=new T.Vector3();bounds=new T.Box3();faces:number[][]=[];edges:[number,number][]=[];
@@ -134,8 +135,42 @@ export class CollisionWorld {
    let changed=false;for(const body of this.slices)if(body.cloth.active&&!body.sleeping&&body.cloth.applyContacts()){changed=true;for(const p of this.byBody.get(body)!)p.update();}if(!changed)break;
   }
  }
+ /** Find the first contact across the whole union before changing either endpoint.
+  * Resolving one proxy at a time can put the particle inside an overlapping rim
+  * proxy, whose nearest face then incorrectly ejects it through the underside. */
+ private sweepParticle(point:T.Vector3,previous:T.Vector3,radius:number,exclude?:PizzaSlice){
+  let earliest=Infinity;
+  sweepEnd.copy(point);
+
+  for(const [body,blocks] of this.blocks){
+   if(body===exclude||!segmentIntersects(this.bodyBounds.get(body)!,point,previous,radius))continue;
+   for(const block of blocks){if(!segmentIntersects(block.bounds,point,previous,radius))continue;
+    for(const proxy of block.parts){if(!segmentIntersects(proxy.bounds,point,previous,radius))continue;
+     let enter=0,exit=1,face=-1,reject=false;
+     for(let i=0;i<proxy.faces.length;i++){
+      const n=proxy.normals[i],vertex=proxy.vertices[proxy.faces[i][0]];
+      const from=a.copy(previous).sub(vertex).dot(n)-radius,to=b.copy(point).sub(vertex).dot(n)-radius;
+      if(from>0&&to>0){reject=true;break;}if(from<=0&&to<=0)continue;
+      const t=from/(from-to);if(from>to){if(t>=enter){enter=t;face=i;}}else exit=Math.min(exit,t);
+      if(enter>exit){reject=true;break;}
+     }
+     if(!reject&&face>=0&&enter<=exit&&enter<earliest){earliest=enter;sweepNormal.copy(proxy.normals[face]);}
+    }
+   }
+  }
+  if(!Number.isFinite(earliest))return false;
+  sweepMotion.subVectors(sweepEnd,previous);
+  point.lerpVectors(previous,sweepEnd,Math.max(0,earliest-.0001));
+  // Keep tangential velocity for the next step; never advance untested residual
+  // motion into another collider during this step.
+  sweepMotion.addScaledVector(sweepNormal,-Math.min(0,sweepMotion.dot(sweepNormal))).multiplyScalar(.88);
+  previous.copy(point).sub(sweepMotion);
+  if(point.y<.025+radius){const lift=.025+radius-point.y;point.y+=lift;previous.y+=lift;}
+  return true;
+ }
  /** Project a small sphere out of a convex proxy and damp normal velocity. */
  resolveParticle(point:T.Vector3,previous:T.Vector3|undefined,radius:number,exclude?:PizzaSlice){
+  if(previous&&point.distanceToSquared(previous)>radius*radius*4&&this.sweepParticle(point,previous,radius,exclude))return;
   // Conservative body bounds reject whole sleeping slices before testing their
   // many deformable patches. Proxy updates expand these bounds during solving.
   for(const [body,parts] of this.byBody){
@@ -147,14 +182,7 @@ export class CollisionWorld {
    if(Math.max(point.x,ox)<bb.min.x-radius||Math.min(point.x,ox)>bb.max.x+radius||Math.max(point.y,oy)<bb.min.y-radius||Math.min(point.y,oy)>bb.max.y+radius||Math.max(point.z,oz)<bb.min.z-radius||Math.min(point.z,oz)>bb.max.z+radius)continue;
    for(const proxy of block.parts){const box=proxy.bounds;
    const outsideBox=point.x<box.min.x-radius||point.x>box.max.x+radius||point.y<box.min.y-radius||point.y>box.max.y+radius||point.z<box.min.z-radius||point.z>box.max.z+radius;
-   if(previous&&point.distanceToSquared(previous)>radius*radius*4){
-    const misses=Math.max(point.x,previous.x)<box.min.x-radius||Math.min(point.x,previous.x)>box.max.x+radius||Math.max(point.y,previous.y)<box.min.y-radius||Math.min(point.y,previous.y)>box.max.y+radius||Math.max(point.z,previous.z)<box.min.z-radius||Math.min(point.z,previous.z)>box.max.z+radius;
-    if(!misses){let enter=0,exit=1,hit=false,reject=false;
-     for(let i=0;i<proxy.faces.length;i++){const n=proxy.normals[i],vertex=proxy.vertices[proxy.faces[i][0]],from=a.copy(previous).sub(vertex).dot(n)-radius,to=b.copy(point).sub(vertex).dot(n)-radius;
-      if(from>0&&to>0){reject=true;break;}if(from<=0&&to<=0)continue;const t=from/(from-to);if(from>to){if(t>=enter){enter=t;sweepNormal.copy(n);hit=true;}}else exit=Math.min(exit,t);if(enter>exit){reject=true;break;}}
-     if(!reject&&hit&&enter<=exit&&enter>=0&&enter<=1){sweepEnd.copy(point);point.lerpVectors(previous,sweepEnd,Math.max(0,enter-.0001));sweepMotion.copy(sweepEnd).sub(point);sweepMotion.addScaledVector(sweepNormal,-Math.min(0,sweepMotion.dot(sweepNormal)));point.addScaledVector(sweepMotion,.88);a.copy(point).sub(sweepEnd);previous.add(a);a.copy(point).sub(previous);const inward=a.dot(sweepNormal);if(inward<0)previous.addScaledVector(sweepNormal,inward);}
-    }else if(outsideBox)continue;
-   }else if(outsideBox)continue;
+   if(outsideBox)continue;
    let nearest=-Infinity,face=-1,outside=false;
    for(let i=0;i<proxy.faces.length;i++){a.copy(point).sub(proxy.vertices[proxy.faces[i][0]]);const d=a.dot(proxy.normals[i]);if(d>radius){outside=true;break;}if(d>nearest){nearest=d;face=i;}}
    if(outside||face<0)continue;const normal=proxy.normals[face],amount=radius-nearest-.003;if(amount<=0)continue;

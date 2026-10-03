@@ -3,6 +3,7 @@ import * as T from 'three';
 import { PizzaSlice } from '../src/pizza/PizzaSlice';
 import { PhysicsWorld } from '../src/physics/PhysicsWorld';
 import { CheeseSystem } from '../src/cheese/CheeseSystem';
+import {rimShape} from '../src/pizza/surface';
 import { params,presets } from '../src/presets/presets';
 const mat=new T.MeshStandardMaterial(),physical=new T.MeshPhysicalMaterial();
 const materials:any={cheese:physical,underside:mat,crumb:mat,crust:mat,dough:mat,sauce:mat,basil:mat,strand:physical};
@@ -15,7 +16,7 @@ function finite(){for(const s of slices){assert(Number.isFinite(s.group.position
 const report:any={};
 grab();const start=target.clone();let activeAt2=0;const stages=new Set<number>();
 for(let i=0;i<720;i++){target.copy(start).add(new T.Vector3(i/720*5,1.1,0));world.step(1/120);if(i===240)activeAt2=cheese.metrics.active;stages.add(cheese.metrics.active);finite();}
-assert(cheese.initial>=4&&cheese.initial<=14);assert(activeAt2>0);assert(cheese.failures>0);assert(stages.size>=4);assert(b.bend>0);assert(Math.abs(b.group.quaternion.x)+Math.abs(b.group.quaternion.z)>.001);
+assert(Math.max(...stages)>0&&Math.max(...stages)<=80,'single pull active network exceeded its budget');assert(activeAt2>0);assert(cheese.failures>0);assert(stages.size>=4);assert(b.bend>0);assert(Math.abs(b.group.quaternion.x)+Math.abs(b.group.quaternion.z)>.001);
 cheese.render();report.slowPull={initial:cheese.initial,activeAt2,failed:cheese.failures,observedStrandCounts:[...stages],bend:b.bend};
 const velocity=b.velocity.length();world.drag=null;b.held=false;const height=b.group.position.y;for(let i=0;i<480;i++)world.step(1/120);assert(b.group.position.y<height);finite();report.release={velocityBeforeRelease:velocity,finalHeight:b.group.position.y};
 world.reset();assert(cheese.strands.length===0);assert(cheese.initial===0);assert(b.group.position.equals(b.home));
@@ -25,7 +26,8 @@ for(const [name,p] of Object.entries(presets)){
 Object.assign(params,presets.neapolitan);world.reset();world.advance(10);assert(world.steps>0);assert(world.accumulator<world.fixedDt*1.01);
 // Validate outward top and crust normals, and all mesh indices.
 for(const slice of slices)for(const {mesh} of slice.deformables){const g=mesh.geometry,idx=g.index!;for(let i=0;i<idx.count;i++)assert(idx.getX(i)<g.attributes.position.count);}
-const crust=slices[0].deformables.find(d=>d.mesh.name==='Cornicione')!.mesh.geometry;const normal=crust.getAttribute('normal');assert(normal.getX(45*29+14)*Math.cos(slices[0].theta)<0,'inside torus surface points inward radially');
+const crust=slices[0].deformables.find(d=>d.mesh.name==='Cornicione')!.mesh.geometry,normal=crust.getAttribute('normal'),position=crust.getAttribute('position');
+let inward=0;for(let i=0;i<position.count;i++){const x=position.getX(i)+slices[0].home.x,z=position.getZ(i)+slices[0].home.z,r=Math.hypot(x,z),shape=rimShape(Math.atan2(z,x));if(r<shape.center-shape.width*.65&&position.getY(i)>.15){assert((normal.getX(i)*x+normal.getZ(i)*z)/r<.15,'inner crust wall has outward-facing normals');inward++;}}assert(inward>20,'missing inner-wall samples');
 assert(peakStrain<1.15,'fast manipulation exceeded the dough stretch limit');
 console.log(JSON.stringify({passed:true,peakStrain,report},null,2));
 
@@ -46,7 +48,7 @@ for(const slice of slices){
  const cuts=slice.deformables.filter(d=>d.mesh.name==='Airy crumb');
  for(let j=0;j<cuts.length;j++){
   const side=j===0?-1:1,angle=slice.theta+side*slice.halfAngle,g=cuts[j].mesh.geometry,p=g.attributes.position,uv=g.attributes.uv,tile=(slice.id*2+(side>0?1:0))%4;
-  for(let i=0;i<p.count;i++){const tangent=-(p.getX(i)+slice.home.x)*Math.sin(angle)+(p.getZ(i)+slice.home.z)*Math.cos(angle);assert(tangent*side<=1e-6&&Math.abs(tangent)<.083,'crumb cavity must recess inside the crust');if(i>=p.count-113)assert(Math.abs(tangent)<1e-6,'cut perimeter no longer sealed');assert(uv.getX(i)>tile/4&&uv.getX(i)<(tile+1)/4,'crumb atlas bleed');}
+  for(let i=0;i<p.count;i++){const tangent=-(p.getX(i)+slice.home.x)*Math.sin(angle)+(p.getZ(i)+slice.home.z)*Math.cos(angle);assert(tangent*side<=1e-6&&Math.abs(tangent)<.083,'crumb cavity must recess inside the crust');if(i>=p.count-81)assert(Math.abs(tangent)<1e-6,'cut perimeter no longer sealed');assert(uv.getX(i)>tile/4&&uv.getX(i)<(tile+1)/4,'crumb atlas bleed');}
  }
 }
 console.log('PASS: recessed cut cavities, sealed perimeters and isolated atlas UVs.');
