@@ -12,10 +12,14 @@ const boundaries=Array.from({length:SLICE_COUNT+1},(_,i)=>-Math.PI/3+i*SECTOR+(i
 type BoundaryEdge={a:number,b:number,r0:number,r1:number};
 export class PizzaSlice {
  group=new T.Group();velocity=new T.Vector3();angularVelocity=new T.Vector3();home=new T.Vector3();theta:number;halfAngle:number;bend=0;bendVelocity=0;twist=0;twistVelocity=0;previousVelocity=new T.Vector3();detached=false;sleeping=false;sleepTime=0;held=false;hasCheese=false;
+ // Normalized mass: the inflated rim carries most weight; the thin sheet carries the rest.
+ readonly crustMass=.65;readonly centerMass=.35;readonly inverseInertia=4;
+ readonly crustCenter=new T.Vector3();cheeseForceBudget=0;grounded=false;
+ massCenter(out:T.Vector3){return out.copy(this.crustCenter).applyQuaternion(this.group.quaternion).add(this.group.position);}
  cloth:DoughCloth;cheeseNecks:{local:T.Vector3,direction:T.Vector3,amount:number,width:number}[]=[];surfaceDirty=false;private cheeseMesh?:T.Mesh;private extrusions?:BoundaryExtrusions;private cheeseBoundary:[BoundaryEdge[],BoundaryEdge[]]=[[],[]];
  deformables:{mesh:T.Mesh,base:Float32Array,bindings:DoughBinding[],neckInfluences?:WeakMap<object,Float32Array>,hadNeck?:boolean}[]=[];toppings:{mesh:T.Mesh,base:T.Vector3,rotation:T.Quaternion,binding:DoughBinding}[]=[];collisionPoints:T.Vector3[]=[];
  constructor(public id:number,public materials:Materials){
-  this.theta=(boundaries[id]+boundaries[id+1])/2;this.halfAngle=(boundaries[id+1]-boundaries[id])/2;this.home.set(Math.cos(this.theta)*1.48,0,Math.sin(this.theta)*1.48);this.group.position.copy(this.home);this.cloth=new DoughCloth(this);
+  this.theta=(boundaries[id]+boundaries[id+1])/2;this.halfAngle=(boundaries[id+1]-boundaries[id])/2;this.home.set(Math.cos(this.theta)*1.48,0,Math.sin(this.theta)*1.48);this.group.position.copy(this.home);let crustVolume=0;for(let i=0;i<9;i++){const angle=this.theta+this.halfAngle*(i/4-1),shape=rimShape(angle),weight=shape.width*shape.height*(i===0||i===8?.5:1);this.crustCenter.addScaledVector(new T.Vector3(Math.cos(angle)*shape.center-this.home.x,.105+shape.height*.42,Math.sin(angle)*shape.center-this.home.z),weight);crustVolume+=weight;}this.crustCenter.divideScalar(crustVolume);this.cloth=new DoughCloth(this);
   this.layer(2.45,DOUGH_BOTTOM,DOUGH_TOP,materials.dough,quality.mobile?28:40,quality.mobile?18:24,true);
   this.layer(2.28,SAUCE_BOTTOM,SAUCE_TOP,materials.sauce,quality.mobile?32:48,quality.mobile?20:30);
   this.mozzarella();this.crust();this.leaves();
@@ -214,7 +218,7 @@ export class PizzaSlice {
  }
  localAnchor(side:number,r:number){const a=cutAngle(this.theta+side*(this.halfAngle-.014),r),x=Math.cos(a)*r,z=Math.sin(a)*r;return new T.Vector3(x-this.home.x,cheeseHeight(x,z),z-this.home.z);}
  worldPoint(local:T.Vector3,out:T.Vector3){this.cloth.deform(local,out);return out.applyQuaternion(this.group.quaternion).add(this.group.position);}
- reset(){this.sleeping=false;this.sleepTime=0;this.cloth.reset();this.group.position.copy(this.home);this.group.quaternion.identity();this.velocity.set(0,0,0);this.angularVelocity.set(0,0,0);this.bend=this.bendVelocity=this.twist=this.twistVelocity=0;this.previousVelocity.set(0,0,0);this.detached=this.held=this.hasCheese=false;this.updateGeometry();}
+ reset(){this.grounded=false;this.cheeseForceBudget=0;this.sleeping=false;this.sleepTime=0;this.cloth.reset();this.group.position.copy(this.home);this.group.quaternion.identity();this.velocity.set(0,0,0);this.angularVelocity.set(0,0,0);this.bend=this.bendVelocity=this.twist=this.twistVelocity=0;this.previousVelocity.set(0,0,0);this.detached=this.held=this.hasCheese=false;this.updateGeometry();}
 }
 
 /** Average resting normals at matching world-space cut vertices. The render meshes

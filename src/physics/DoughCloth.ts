@@ -16,6 +16,7 @@ export class DoughCloth {
  private renderOffsets=new Float64Array((1+this.radial*(this.across+1))*3);private renderNormals=new Float64Array((1+this.radial*(this.across+1))*3);
  private bindingCache=new WeakMap<T.Vector3,{x:number,z:number,value:DoughBinding}>();
  links:Link[]=[];triangles:number[][]=[];inverseMass:number[]=[];active=false;contacts=0;rootReaction=new T.Vector3();rootTorque=new T.Vector3();
+ particleMass:number[]=[];meanMass=1;
  contactOffsets:T.Vector3[]=[];contactCounts:number[]=[];
  private grabBinding:DoughBinding|null=null;private grabLocal=new T.Vector3(Infinity,0,0);
  constructor(public body:PizzaSlice){
@@ -31,6 +32,12 @@ export class DoughCloth {
    if(r)this.triangles.push([i,j,k]);this.triangles.push([j,l,k]);
    link(i,j);link(i,k);link(j,l);link(k,l);link(j,k);if(r)link(i,l);
   }
+  // Tributary triangle area gives light tip particles and heavier outer patches.
+  this.particleMass=this.rest.map(()=>0);
+  for(const [a,b,c] of this.triangles){u.subVectors(this.rest[b],this.rest[a]);v.subVectors(this.rest[c],this.rest[a]);const area=u.cross(v).length()/6;for(const i of [a,b,c])this.particleMass[i]+=area;}
+  let area=0,count=0;for(let i=0;i<this.rest.length;i++)if(this.inverseMass[i]){area+=this.particleMass[i];count++;}
+  this.meanMass=body.centerMass/count;
+  for(let i=0;i<this.rest.length;i++){this.particleMass[i]*=body.centerMass/area;if(this.inverseMass[i])this.inverseMass[i]=this.meanMass/this.particleMass[i];}
   for(let r=0;r<=this.radial;r++)for(let a=0;a<=this.across;a++){
    if(r+2<=this.radial)link(this.index(r,a),this.index(r+2,a),true);
    if(a+2<=this.across&&r)link(this.index(r,a),this.index(r,a+2),true);
@@ -72,7 +79,10 @@ export class DoughCloth {
  limitStretch(){let changed=false;for(let pass=0;pass<6;pass++)for(const link of this.links)if(!link.bend){delta.copy(this.points[link.b]).sub(this.points[link.a]);const length=delta.length(),wx=this.inverseMass[link.a],wy=this.inverseMass[link.b];if(length>link.length*1.12&&wx+wy){changed=true;delta.multiplyScalar((length-link.length*1.12)/length/(wx+wy));this.points[link.a].addScaledVector(delta,wx);this.points[link.b].addScaledVector(delta,-wy);this.previous[link.a].addScaledVector(delta,wx*.7);this.previous[link.b].addScaledVector(delta,-wy*.7);}}return changed;}
  applyContacts(){let changed=false;for(let i=0;i<this.points.length;i++)if(this.contactCounts[i]){changed=true;delta.copy(this.contactOffsets[i]).multiplyScalar(1/this.contactCounts[i]).clampLength(0,.12);this.points[i].add(delta);this.previous[i].add(delta);this.contactOffsets[i].set(0,0,0);this.contactCounts[i]=0;}changed=this.limitStretch()||changed;if(changed)this.cache();return changed;}
  surfaceNormal(binding:DoughBinding,out:T.Vector3,alpha=1){out.set(0,0,0);for(let i=0;i<4;i++)out.addScaledVector(this.normals[binding.ids[i]],binding.weights[i]*alpha).addScaledVector(this.lastNormals[binding.ids[i]],binding.weights[i]*(1-alpha));return out.normalize();}
- applyForce(point:T.Vector3,force:T.Vector3,dt:number){if(!this.active)return;const b=this.binding(point);for(let i=0;i<4;i++)if(this.inverseMass[b.ids[i]])this.previous[b.ids[i]].addScaledVector(force,-dt*dt*b.weights[i]*3);}
+ applyForce(point:T.Vector3,force:T.Vector3,dt:number){if(!this.active||this.body.sleeping)return;
+  // Shared per-slice force budget: more visual strands cannot multiply the load.
+  const magnitude=force.length(),scale=Math.min(1,Math.max(0,.16-this.body.cheeseForceBudget)/Math.max(magnitude,1e-9));this.body.cheeseForceBudget+=magnitude*scale;
+  const b=this.binding(point);for(let i=0;i<4;i++)if(this.inverseMass[b.ids[i]])this.previous[b.ids[i]].addScaledVector(force,-dt*dt*b.weights[i]*scale*this.inverseMass[b.ids[i]]/this.meanMass);}
  step(dt:number,collisions:CollisionWorld,grab:{local:T.Vector3;target:T.Vector3}|null){
   this.start();this.contacts=0;const gravity=params.gravity/65*6.3,soft=T.MathUtils.clamp(params.sag*(1-params.stiffness/125)*(.65+warmth()*.6),.035,1.6);
   for(let i=0;i<this.points.length;i++)if(this.inverseMass[i]){
@@ -84,7 +94,7 @@ export class DoughCloth {
   for(let pass=0;pass<9;pass++){
    for(const link of this.links){const x=this.points[link.a],y=this.points[link.b],wx=this.inverseMass[link.a],wy=this.inverseMass[link.b];if(!(wx+wy))continue;delta.copy(y).sub(x);const length=delta.length();if(length<1e-7)continue;
     const alpha=(link.bend?.0028*soft:.0000003)/(dt*dt),dl=(-(length-link.length)-alpha*link.lambda)/(wx+wy+alpha);link.lambda+=dl;
-    delta.multiplyScalar(dl/length);x.addScaledVector(delta,-wx);y.addScaledVector(delta,wy);if(!link.bend){if(!wx){this.rootReaction.addScaledVector(delta,-1);u.copy(x).sub(this.body.group.position).cross(delta);this.rootTorque.sub(u);}if(!wy){this.rootReaction.add(delta);u.copy(y).sub(this.body.group.position).cross(delta);this.rootTorque.add(u);}}
+    delta.multiplyScalar(dl/length);x.addScaledVector(delta,-wx);y.addScaledVector(delta,wy);if(!link.bend){if(!wx){this.rootReaction.addScaledVector(delta,-1);u.copy(x).sub(this.body.massCenter(target)).cross(delta);this.rootTorque.sub(u);}if(!wy){this.rootReaction.add(delta);u.copy(y).sub(this.body.massCenter(target)).cross(delta);this.rootTorque.add(u);}}
    }
    // Weak shape memory prevents permanent creasing; the warm center remains very pliable.
    for(let i=0;i<this.points.length;i++)if(this.inverseMass[i]){const radius=Math.hypot(this.rest[i].x+this.body.home.x,this.rest[i].z+this.body.home.z)/this.radius;
@@ -97,8 +107,11 @@ export class DoughCloth {
    if(pass>=4)for(let i=0;i<this.points.length;i++)if(this.inverseMass[i]){old.copy(this.points[i]);collisions.resolveParticle(this.points[i],this.previous[i],.026,this.body);if(old.distanceToSquared(this.points[i])>1e-10)this.contacts++;}
    this.pin();
   }
-  // Tension in the sheet reaches the crust when a soft region is pinched.
-  if(grab&&Math.hypot(grab.local.x+this.body.home.x,grab.local.z+this.body.home.z)<2.05){delta.copy(this.rootReaction).multiplyScalar(.09/dt).clampLength(0,.45);this.body.velocity.add(delta);delta.copy(this.rootTorque).multiplyScalar(.006/dt).clampLength(0,.035);this.body.angularVelocity.add(delta);}
+  // The sheet transfers its load to the crust even after release, not only during a center grab.
+  {const pinched=grab&&Math.hypot(grab.local.x+this.body.home.x,grab.local.z+this.body.home.z)<2.05;
+   delta.copy(this.rootReaction).multiplyScalar((pinched?.09:this.meanMass/this.body.crustMass)/dt).clampLength(0,dt*(pinched?54:2));this.body.velocity.add(delta);
+   delta.copy(this.rootTorque).multiplyScalar((pinched?.006:this.meanMass*this.body.inverseInertia)/dt).clampLength(0,dt*3);this.body.angularVelocity.add(delta);
+  }
   this.limitStretch();this.cache();
  }
  cache(){

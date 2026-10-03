@@ -274,3 +274,11 @@ The v48 screenshot exposed a shape problem: one uniformly spaced source-grid edg
 Broad extrusion strength is now derived from its active boundary span count rather than the obsolete tiny string-radius estimate. Necking begins later relative to rupture, and the bridge body keeps more thickness at moderate separation. No crust, texture, lighting, UI, camera or slice-solver changes.
 
 Validation: focused medium-separation shape fixture (unequal widths, both open and joined sections, no premature primary rupture), pull/tear/reset geometry regression, production build and diff check. CPU mesh views were inspected from two angles. GPU material/lighting appearance remains unverified in this environment.
+
+## Slice weight and settling correction
+
+- Removed per-strand rigid-body velocity impulses. Cheese now applies only a small local force to the deformable sheet, capped across the whole slice at 0.16 normalized force units per fixed step. Sleeping slices are not woken by residual cheese.
+- Assigned 65% normalized mass to the stiff rim and 35% to the thin center. Center particle masses follow tributary triangle area; the rim center of mass follows sampled rim width/height. Integration rotates around this mass center without moving the visible rest geometry.
+- Sheet constraint reactions now reach the rim after release. Off-center ground impulses create tipping torque, with bounded contact friction and rolling dissipation. No forced upright/flat rotation is applied.
+- Supported nearly-flat slices tolerate low contact-solver jitter when entering sleep. Airborne/tilted slices retain the stricter existing threshold.
+- Validation: slice-settling (opposite release tilts, finite ground contact, force cap, mass distribution, sleeping cheese, held crust control and center sag), dough-cloth, multi-slice, simulation-timing and performance-equivalence pass. TypeScript/production build pass. The existing collisions-camera suite passes drop/stack/push checks but fails its fixed-height swept-particle assertion on both unchanged v55 and this source. Browser-rendered behavior was not visually verified in this pass.

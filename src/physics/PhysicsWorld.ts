@@ -4,7 +4,7 @@ import { PizzaSlice } from '../pizza/PizzaSlice';
 import { params, reducedMotion } from '../presets/presets';
 import type { CheeseSystem } from '../cheese/CheeseSystem';
 export interface DragConstraint { body:PizzaSlice; local:T.Vector3; target:T.Vector3; }
-const point=new T.Vector3(), arm=new T.Vector3(), force=new T.Vector3(), torque=new T.Vector3(), axis=new T.Vector3(), q=new T.Quaternion();
+const point=new T.Vector3(), arm=new T.Vector3(), force=new T.Vector3(), torque=new T.Vector3(), axis=new T.Vector3(), q=new T.Quaternion(),center=new T.Vector3(),offset=new T.Vector3();
 export class PhysicsWorld {
  drag:DragConstraint|null=null; accumulator=0; timeMs=0; fixedDt=1/120; steps=0;
  collisions:CollisionWorld;
@@ -14,9 +14,9 @@ export class PhysicsWorld {
   const gravity=params.gravity/65*6.3;
   for(const b of this.slices){
    if(!b.detached||b.sleeping)continue;
-   b.cloth.snapshot();b.velocity.y-=gravity*dt;
+   b.cheeseForceBudget=0;b.cloth.snapshot();b.velocity.y-=gravity*dt;
    if(this.drag?.body===b&&Math.hypot(this.drag.local.x+b.home.x,this.drag.local.z+b.home.z)>=2.05){
-    point.copy(this.drag.local).applyQuaternion(b.group.quaternion).add(b.group.position);arm.copy(point).sub(b.group.position);
+    point.copy(this.drag.local).applyQuaternion(b.group.quaternion).add(b.group.position);arm.copy(point).sub(b.massCenter(center));
     force.copy(this.drag.target).sub(point).multiplyScalar(105);
     torque.copy(b.angularVelocity).cross(arm);torque.add(b.velocity);force.addScaledVector(torque,-(reducedMotion.matches?22:15));force.clampLength(0,70);
     b.velocity.addScaledVector(force,dt);torque.copy(arm).cross(force).multiplyScalar(.55);torque.clampLength(0,14);b.angularVelocity.addScaledVector(torque,dt);
@@ -26,8 +26,9 @@ export class PhysicsWorld {
    if(b.held){torque.set(b.group.quaternion.x,0,b.group.quaternion.z).multiplyScalar(-1.5);b.angularVelocity.addScaledVector(torque,dt);}
    b.velocity.multiplyScalar(Math.exp(-dt*(b.held?4.5:.65)));b.velocity.clampLength(0,10);
    b.angularVelocity.multiplyScalar(Math.exp(-dt*(b.held?3.1:1.3)));b.angularVelocity.clampLength(0,3.5);
-   b.group.position.addScaledVector(b.velocity,dt);
+   b.massCenter(center).addScaledVector(b.velocity,dt);
    const angle=b.angularVelocity.length()*dt;if(angle>1e-7){axis.copy(b.angularVelocity).normalize();q.setFromAxisAngle(axis,angle);b.group.quaternion.premultiply(q).normalize();}
+   offset.copy(b.crustCenter).applyQuaternion(b.group.quaternion);b.group.position.copy(center).sub(offset);
    for(const key of ['x','z'] as const){if(Math.abs(b.group.position[key])>6.8){b.group.position[key]=Math.sign(b.group.position[key])*6.8;b.velocity[key]*=-.2;}}
    if(b.group.position.y>5){b.group.position.y=5;b.velocity.y=Math.min(0,b.velocity.y);}
    if(!Number.isFinite(b.group.position.lengthSq()))b.reset();
@@ -43,7 +44,8 @@ export class PhysicsWorld {
   this.collisions.solveDough();
   this.cheese.update(dt);
   for(const b of this.slices)if(b.detached&&!b.held&&!b.sleeping){
-   const quiet=b.velocity.lengthSq()<.003&&b.angularVelocity.lengthSq()<.003&&b.cloth.points.every((p,i)=>p.distanceToSquared(b.cloth.previous[i])<.000002);
+   const supported=b.grounded&&Math.abs(axis.set(0,1,0).applyQuaternion(b.group.quaternion).y)>.9;
+   const quiet=b.velocity.lengthSq()<(supported?.008:.003)&&b.angularVelocity.lengthSq()<(supported?.018:.003)&&b.cloth.points.every((p,i)=>p.distanceToSquared(b.cloth.previous[i])<.000002);
    b.sleepTime=quiet?b.sleepTime+dt:0;if(b.sleepTime>1.6){b.sleeping=true;b.velocity.set(0,0,0);b.angularVelocity.set(0,0,0);b.updateGeometry();}
   }
   this.steps++;

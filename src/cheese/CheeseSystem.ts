@@ -72,9 +72,9 @@ export class CheeseStrand {
    if(i>0){this.points[i].addScaledVector(delta,scale);this.previous[i].addScaledVector(delta,scale*.8);}if(i+1<COUNT-1){this.points[i+1].addScaledVector(delta,scale);this.previous[i+1].addScaledVector(delta,scale*.8);}
   }
   if(!this.broken&&distance>.35){
-   const resistance=Math.min(6,(this.stretch-1)*.70)*(.3+params.strength/100)*(this.primary?1:.24);
-   temp.copy(b).sub(a).normalize().multiplyScalar(resistance);this.moving.cloth.applyForce(this.localA,temp,dt);this.moving.velocity.addScaledVector(temp,dt*.20);this.moving.sleeping=false;
-   if(this.neighbor.detached){temp.negate();this.neighbor.cloth.applyForce(this.localB,temp,dt);this.neighbor.velocity.addScaledVector(temp,dt*.20);this.neighbor.sleeping=false;}
+   const resistance=Math.min(.12,Math.max(0,distance-.35)*.12)*(.3+params.strength/100)*(this.primary?1:.24);
+   temp.copy(b).sub(a).normalize().multiplyScalar(resistance);this.moving.cloth.applyForce(this.localA,temp,dt);
+   if(this.neighbor.detached){temp.negate();this.neighbor.cloth.applyForce(this.localB,temp,dt);}
   }
  }
  sample(t:number,out:T.Vector3){return this.curve.getPoint(t,out);}

@@ -67,7 +67,7 @@ export class CollisionWorld {
   separation.copy(y.center).sub(x.center);if(bestNormal.dot(separation)<0)bestNormal.negate();return depth;
  }
  solve(){
-  this.contacts=0;this.update();
+  this.contacts=0;this.update();for(const body of this.slices)if(!body.sleeping)body.grounded=false;
   for(let pass=0;pass<4;pass++){
    for(let i=0;i<this.slices.length;i++)for(let j=i+1;j<this.slices.length;j++){
     const x=this.slices[i],y=this.slices[j];if((!x.detached||x.sleeping)&&(!y.detached||y.sleeping))continue;if(x.group.position.distanceToSquared(y.group.position)>20)continue;
@@ -79,13 +79,39 @@ export class CollisionWorld {
      const depth=this.overlap(px,py);if(depth<=.006)continue;this.contacts++;if(depth>.012){if(x.detached)x.sleeping=false;if(y.detached)y.sleeping=false;}
      const correction=Math.min(.12,(depth-.006)*.75)/(wx+wy);separation.copy(bestNormal).multiplyScalar(correction);if(wx)x.group.position.addScaledVector(separation,-wx);if(wy)y.group.position.addScaledVector(separation,wy);
       relative.copy(y.velocity).sub(x.velocity);const speed=relative.dot(bestNormal);if(speed<0){const impulse=-speed*.16/(wx+wy);if(wx)x.velocity.addScaledVector(bestNormal,-impulse*wx);if(wy)y.velocity.addScaledVector(bestNormal,impulse*wy);
-      contact.copy(px.center).add(py.center).multiplyScalar(.5);if(wx){arm.copy(contact).sub(x.group.position);spin.crossVectors(arm,bestNormal).multiplyScalar(-impulse*wx*.06).clampLength(0,.25);x.angularVelocity.add(spin);}if(wy){arm.copy(contact).sub(y.group.position);spin.crossVectors(arm,bestNormal).multiplyScalar(impulse*wy*.06).clampLength(0,.25);y.angularVelocity.add(spin);}
+      contact.copy(px.center).add(py.center).multiplyScalar(.5);if(wx){arm.copy(contact).sub(x.massCenter(a));spin.crossVectors(arm,bestNormal).multiplyScalar(-impulse*wx*.06).clampLength(0,.25);x.angularVelocity.add(spin);}if(wy){arm.copy(contact).sub(y.massCenter(a));spin.crossVectors(arm,bestNormal).multiplyScalar(impulse*wy*.06).clampLength(0,.25);y.angularVelocity.add(spin);}
      }
      shiftX.copy(separation).multiplyScalar(-wx);shiftY.copy(separation).multiplyScalar(wy);
      if(wx)for(const p of this.byBody.get(x)!)p.translate(shiftX);if(wy)for(const p of this.byBody.get(y)!)p.translate(shiftY);
     }}
    }
-   for(const body of this.slices)if(body.detached&&!body.sleeping){let low=Infinity;for(const proxy of this.byBody.get(body)!)if(!proxy.soft)low=Math.min(low,proxy.bounds.min.y);if(low<.025){shiftX.set(0,.025-low,0);body.group.position.add(shiftX);if(body.velocity.y<0)body.velocity.y*=-.08;body.velocity.x*=.97;body.velocity.z*=.97;body.angularVelocity.multiplyScalar(.94);for(const proxy of this.byBody.get(body)!)proxy.translate(shiftX);}}
+   for(const body of this.slices)if(body.detached&&!body.sleeping){
+    const parts=this.byBody.get(body)!;let low=Infinity;
+    for(const proxy of parts)if(!proxy.soft)low=Math.min(low,proxy.bounds.min.y);
+    if(low<.026){
+     body.grounded=true;
+     contact.set(0,0,0);let count=0;
+     for(const proxy of parts)if(!proxy.soft)for(const vertex of proxy.vertices)if(vertex.y<low+.018){contact.add(vertex);count++;}
+     if(!count)continue;contact.multiplyScalar(1/count);
+     shiftX.set(0,Math.max(0,.025-low),0);body.group.position.add(shiftX);contact.add(shiftX);
+     // An off-center support applies torque. This lets the rim roll onto its
+     // broad base instead of cancelling gravity while leaving it balanced on an edge.
+     arm.copy(contact).sub(body.massCenter(a));
+     relative.crossVectors(body.angularVelocity,arm).add(body.velocity);
+     const inverseMass=1/body.crustMass,lever=arm.x*arm.x+arm.z*arm.z;
+     if(relative.y<0){
+      const impulse=-relative.y/(inverseMass+lever*body.inverseInertia);
+      body.velocity.y+=impulse*inverseMass;
+      spin.set(-arm.z,0,arm.x).multiplyScalar(impulse*body.inverseInertia);body.angularVelocity.add(spin);
+      // Coulomb-style sliding friction is limited by the normal impulse.
+      relative.crossVectors(body.angularVelocity,arm).add(body.velocity);relative.y=0;
+      const speed=relative.length();if(speed>1e-8){relative.multiplyScalar(-Math.min(speed/(inverseMass+arm.lengthSq()*body.inverseInertia),impulse*.55)/speed);body.velocity.addScaledVector(relative,inverseMass);spin.crossVectors(arm,relative).multiplyScalar(body.inverseInertia);body.angularVelocity.add(spin);}
+     }
+     // Soft baked dough dissipates rolling/contact motion without choosing an orientation.
+     body.angularVelocity.multiplyScalar(.96);
+     for(const proxy of parts)proxy.translate(shiftX);
+    }
+   }
   }
  }
  /** Resolve patch intersections locally after integration, including edge-on-sheet contact.
