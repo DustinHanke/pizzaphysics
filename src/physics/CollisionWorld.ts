@@ -159,10 +159,11 @@ export class CollisionWorld {
    }
   }
   if(!Number.isFinite(earliest))return false;
-  sweepMotion.subVectors(sweepEnd,previous);
   point.lerpVectors(previous,sweepEnd,Math.max(0,earliest-.0001));
-  // Keep tangential velocity for the next step; never advance untested residual
-  // motion into another collider during this step.
+  sweepMotion.subVectors(point,previous);
+  // Preserve only motion actually travelled before impact. Carrying the entire
+  // attempted displacement into Verlet history reinjects rejected constraint
+  // corrections on every solver pass and launches cheese particles outward.
   sweepMotion.addScaledVector(sweepNormal,-Math.min(0,sweepMotion.dot(sweepNormal))).multiplyScalar(.88);
   previous.copy(point).sub(sweepMotion);
   if(point.y<.025+radius){const lift=.025+radius-point.y;point.y+=lift;previous.y+=lift;}
