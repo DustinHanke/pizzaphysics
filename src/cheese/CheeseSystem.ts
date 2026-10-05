@@ -3,13 +3,14 @@ import { PizzaSlice, SLICE_COUNT, type MozzarellaExtrusion } from '../pizza/Pizz
 import { rand } from '../pizza/materials';
 import { cheeseField,CHEESE_EDGE,getMozzarellaAmount } from '../pizza/surface';
 import { params, warmth, reducedMotion } from '../presets/presets';
+import { BridgeLattice } from './BridgeLattice';
 import { CheeseRenderer } from './CheeseRenderer';
 import { CheeseWeb } from './CheeseWeb';
 import type {CollisionWorld} from '../physics/CollisionWorld';
 const anchorInverse=new T.Quaternion();
 const COUNT=10,delta=new T.Vector3(),temp=new T.Vector3(),midpoint=new T.Vector3(),unprojected=new T.Vector3(),a=new T.Vector3(),b=new T.Vector3();
 export class CheeseStrand {
- points:T.Vector3[]=[];previous:T.Vector3[]=[];renders:CheeseRenderer[]=[];midA=new T.Vector3();midB=new T.Vector3();curve:T.CatmullRomCurve3;extrusion?:MozzarellaExtrusion;
+ points:T.Vector3[]=[];previous:T.Vector3[]=[];renders:CheeseRenderer[]=[];midA=new T.Vector3();midB=new T.Vector3();curve:T.CatmullRomCurve3;lattice?:BridgeLattice;extrusion?:MozzarellaExtrusion;
  neckA:{local:T.Vector3,direction:T.Vector3,amount:number,width:number};neckB:{local:T.Vector3,direction:T.Vector3,amount:number,width:number};
  localA:T.Vector3;localB:T.Vector3;restLength:number;threshold:number;radius:number;thicknessStrength=1;rendered=false;broken=false;age=0;length=0;stretch=1;segmentRest=.055;neck=0;load=1;damage=0;yieldLength=0;hardLimit=0;breakIndex=4;amountStrength=1;time=0;
  constructor(public moving:PizzaSlice,public neighbor:PizzaSlice,public side:number,public r:number,public seed:number,scene:T.Scene,material:T.MeshPhysicalMaterial,public primary=false){
@@ -27,6 +28,7 @@ export class CheeseStrand {
   if(primary)this.extrusion=moving.createMozzarellaExtrusion(neighbor,side,r,seed);
   if(primary&&!this.extrusion)this.primary=false; // Occupied roots can only add secondary fibers.
   if(this.extrusion){this.thicknessStrength=.82+.08*Math.min(4,this.extrusion.lanes.length);moving.mozzarellaAnchor(this.extrusion.source,this.localA);neighbor.mozzarellaAnchor(this.extrusion.target,this.localB);moving.worldPoint(this.localA,a);neighbor.worldPoint(this.localB,b);for(let i=0;i<COUNT;i++){const t=i/(COUNT-1),p=a.clone().lerp(b,t),arch=Math.sin(t*Math.PI);p.y-=arch*sag;this.points[i].copy(p);this.previous[i].copy(p);}}
+  if(this.extrusion){const ex=this.extrusion,anchors=[new T.Vector3(),new T.Vector3(),new T.Vector3(),new T.Vector3()];moving.mozzarellaAnchor([ex.source[0]],anchors[0]);moving.mozzarellaAnchor([ex.source[ex.source.length-1]],anchors[1]);neighbor.mozzarellaAnchor([ex.target[0]],anchors[2]);neighbor.mozzarellaAnchor([ex.target[ex.target.length-1]],anchors[3]);this.lattice=new BridgeLattice([moving,neighbor],anchors);this.lattice.step(1/120,this.curve);ex.sampleSurface=(u,t,out)=>this.lattice!.sample(u,t,out);}
   this.neckA={local:this.localA,direction:new T.Vector3(),amount:0,width:primary?.15:.08};this.neckB={local:this.localB,direction:new T.Vector3(),amount:0,width:primary?.15:.08};moving.cheeseNecks.push(this.neckA);neighbor.cheeseNecks.push(this.neckB);
   const uvA=new T.Vector2(.5+(moving.home.x+this.localA.x)/5.3,.5+(moving.home.z+this.localA.z)/5.3),uvB=new T.Vector2(.5+(neighbor.home.x+this.localB.x)/5.3,.5+(neighbor.home.z+this.localB.z)/5.3);
   if(!this.extrusion)this.renders.push(new CheeseRenderer(scene,material,this.points,[uvA,uvB]));
@@ -71,6 +73,7 @@ export class CheeseStrand {
    if(this.broken&&i===this.breakIndex)continue;midpoint.copy(this.points[i]).lerp(this.points[i+1],.5);unprojected.copy(midpoint);collisions.resolveParticle(midpoint,undefined,Math.max(.005,this.radius/Math.sqrt(this.stretch)*.45));delta.copy(midpoint).sub(unprojected).clampLength(0,.08);const scale=i===0||i===COUNT-2?2:1;
    if(i>0){this.points[i].addScaledVector(delta,scale);this.previous[i].addScaledVector(delta,scale*.8);}if(i+1<COUNT-1){this.points[i+1].addScaledVector(delta,scale);this.previous[i+1].addScaledVector(delta,scale*.8);}
   }
+  if(!this.broken)this.lattice?.step(dt,this.curve,collisions);
   if(!this.broken&&distance>.35){
    const resistance=Math.min(.12,Math.max(0,distance-.35)*.12)*(.3+params.strength/100)*(this.primary?1:.24);
    temp.copy(b).sub(a).normalize().multiplyScalar(resistance);this.moving.cloth.applyForce(this.localA,temp,dt);
@@ -98,38 +101,27 @@ export class CheeseSystem {
  strands:CheeseStrand[]=[];webs:CheeseWeb[]=[];initial=0;failures=0; pulls=0;private renderTick=0;
  constructor(public slices:PizzaSlice[],public scene:T.Scene,public material:T.MeshPhysicalMaterial){}
  spawn(slice:PizzaSlice){
-  slice.hasCheese=true;const seed=slice.id*173+(++this.pulls)*997,created:CheeseStrand[]=[],samples:{side:number,r:number,weight:number}[]=[];let richness=0;
+  slice.hasCheese=true;const seed=slice.id*173+(++this.pulls)*997,created:CheeseStrand[]=[];
   const amount=getMozzarellaAmount()/100;if(amount===0)return;
   // An existing bridge already follows both slices. Grabbing its neighbor
   // must not create a second full cheese network on the same physical cut.
   const availableSides=[-1,1].filter(side=>{const neighbor=this.slices[(slice.id+side+SLICE_COUNT)%SLICE_COUNT];return !this.strands.some(s=>!s.broken&&((s.moving===slice&&s.neighbor===neighbor)||(s.moving===neighbor&&s.neighbor===slice)));});
-  for(const side of availableSides)for(let i=0;i<96;i++){
-   const r=.22+i*.020+(rand(seed+i*17+side*37)-.5)*.010,neighbor=this.slices[(slice.id+side+SLICE_COUNT)%SLICE_COUNT];
-   const localA=slice.localAnchor(side,r),localB=neighbor.localAnchor(-side,r);
-   const f=Math.min(cheeseField(localA.x+slice.home.x,localA.z+slice.home.z),cheeseField(localB.x+neighbor.home.x,localB.z+neighbor.home.z));
-   // Both ends must be inside actual mozzarella, not merely near a promising pool.
-   // Accept points nearer the pool boundary while still requiring both ends
-   // to lie inside real mozzarella. This yields clustered pull zones instead
-   // of a few isolated anchors well inside each large pool.
-   if(f<CHEESE_EDGE+.015||!slice.canExtrudeMozzarella(side,r)||!neighbor.canExtrudeMozzarella(-side,r))continue;slice.worldPoint(localA,a);neighbor.worldPoint(localB,b);if(a.distanceTo(b)>.85)continue;
-   samples.push({side,r,weight:Math.min(2,f*f)});richness+=Math.min(1,f);
+  // One solver chain per contiguous covered region, never one per sampling point.
+  // The render extension resolves it into 2–5 paths independent of sampling density.
+  for(const side of availableSides){
+   const neighbor=this.slices[(slice.id+side+SLICE_COUNT)%SLICE_COUNT];
+   for(const region of slice.mozzarellaIntervals(side)){
+    const r=(region.r0+region.r1)*.5,other=neighbor.mozzarellaIntervals(-side).find(p=>r>=p.r0&&r<=p.r1);
+    if(!other)continue;
+    const localA=slice.localAnchor(side,r),localB=neighbor.localAnchor(-side,r);
+    if(Math.min(cheeseField(localA.x+slice.home.x,localA.z+slice.home.z),cheeseField(localB.x+neighbor.home.x,localB.z+neighbor.home.z))<CHEESE_EDGE)continue;
+    slice.worldPoint(localA,a);neighbor.worldPoint(localB,b);if(a.distanceTo(b)>.85)continue;
+    const strand=new CheeseStrand(slice,neighbor,side,r,seed+created.length*61,this.scene,this.material,true);
+    if(!strand.extrusion){strand.dispose();continue;}
+    this.strands.push(strand);created.push(strand);this.initial++;
+   }
   }
-  if(!samples.length)return;richness/=samples.length;
-  const separation=slice.group.position.distanceTo(slice.home),pullProgress=T.MathUtils.smoothstep(separation,.055,.48);
-  // A well-covered cut edge begins as a soft sheet and resolves into a web as it stretches.
-  const desired=Math.min(40,Math.round((22+richness*14+pullProgress*4)*Math.sqrt(amount)*availableSides.length/2));
-  const primary=Math.max(4,Math.min(10,Math.round(desired*(.22+rand(seed+8)*.08))));
-  for(let i=0;i<Math.min(desired,samples.length);i++){
-   let total=samples.reduce((sum,p)=>sum+p.weight,0);if(total<.00001)break;let choice=rand(seed+i*43+27)*total,selected=samples[0];for(const p of samples){choice-=p.weight;if(choice<=0){selected=p;break;}}
-   const {side,r}=selected,neighbor=this.slices[(slice.id+side+SLICE_COUNT)%SLICE_COUNT],strand=new CheeseStrand(slice,neighbor,side,r,seed+i*61,this.scene,this.material,i<primary);
-   strand.radius*=.83+Math.min(.3,selected.weight*.16);this.strands.push(strand);created.push(strand);this.initial++;
-   // A nearby mozzarella pool can feed a cluster, but not coincident anchors.
-   for(const p of samples)if(p.side===side&&Math.abs(p.r-r)<.030)p.weight=0;
-  }
-  const pairs:{left:CheeseStrand,right:CheeseStrand,score:number}[]=[];
-  for(const side of [-1,1]){const group=created.filter(s=>s.side===side).sort((a,b)=>a.r-b.r);for(let i=0;i<group.length-1;i++){const gap=group[i+1].r-group[i].r;if(gap>.032&&gap<.22)pairs.push({left:group[i],right:group[i+1],score:rand(seed+i*83+side*77)});}}
-  pairs.sort((a,b)=>a.score-b.score);const branches=Math.min(pairs.length,Math.round((6+richness*8+pullProgress*6)*Math.sqrt(amount)));let sheets=0;
-  for(let i=0;i<branches;i++){const pair=pairs[i],nearSource=separation<.22,rootGap=pair.left.points[0].distanceTo(pair.right.points[0]),hasSheet=sheets<(nearSource?4:2)&&rootGap<.105&&rand(seed+i*89+66)<Math.min(.58,(.12+richness*.30)*Math.sqrt(amount));if(hasSheet)sheets++;this.webs.push(new CheeseWeb(pair.left,pair.right,seed+i*97,hasSheet,this.scene,this.material));this.initial++;}
+
  }
  beginPull(slice:PizzaSlice){if(slice.group.position.distanceTo(slice.home)<.42&&!this.strands.some(s=>s.moving===slice&&!s.broken))slice.hasCheese=false;}
  update(dt:number){

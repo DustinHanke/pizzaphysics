@@ -16,7 +16,7 @@ for(const amount of [50,65,100,160,200]){
  let count=0,branches=0,sheets=0,strength=0,n=0;
  const system=new CheeseSystem(slices,scene,materials.strand);
  for(let pull=0;pull<18;pull++){
-  system.spawn(slices[pull%6]);count+=system.strands.length;branches+=system.webs.length;sheets+=system.webs.reduce((sum,w)=>sum+w.membranes.length,0);
+  system.spawn(slices[pull%6]);count+=system.strands.length;branches+=system.strands.reduce((n,s)=>n+(s.extrusion?.lanes.length??0),0);sheets+=system.webs.reduce((sum,w)=>sum+w.membranes.length,0);
   for(const s of system.strands){for(const [owner,local] of [[s.moving,s.localA],[s.neighbor,s.localB]] as const)assert(cheeseField(local.x+owner.home.x,local.z+owner.home.z)>=CHEESE_EDGE,'strand rooted in tomato');strength+=s.amountStrength;n++;}
   system.clear();
  }

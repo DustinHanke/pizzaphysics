@@ -1,18 +1,20 @@
 import * as T from 'three';
 import {rand} from '../utils/noise';
 
-const ROWS=28, ACROSS=3, LAYER=ROWS*ACROSS;
-type Lane={source:[number,number],target:[number,number],first:number,limit:number,brokenAt:number,cut:number};
+const ROWS=28, ACROSS=3, LAYER=(ROWS+1)*ACROSS;
+type Lane={source:[number,number],target:[number,number],first:number,u0:number,u1:number,limit:number,brokenAt:number,cut:number};
 export type MozzarellaExtrusion={
  source:number[],target:number[],side:number,seed:number,active:boolean,lanes:Lane[],
+ sampleSurface?:(u:number,t:number,out:T.Vector3)=>T.Vector3,
  sampleTarget:(id:number,out:T.Vector3,bottom?:boolean)=>void,
  targetAttribute:(id:number,name:string,component:number)=>number,
- fragments?:[T.CatmullRomCurve3,T.CatmullRomCurve3],uvReady?:boolean,
+ visible?:boolean,fragments?:[T.CatmullRomCurve3,T.CatmullRomCurve3],uvReady?:boolean,
  core:number[],holes:{center:number,span:number,width:number,phase:number}[],sourcePoints:T.Vector3[],targetPoints:T.Vector3[],
 };
 export type PullState={length:number,limit:number,neck:number,broken:boolean,age:number,time:number,breakPoint:number};
 
-/** Extensions of one existing mozzarella mesh, sharing its root vertex IDs and material.
+/** Local extensions using existing mozzarella boundary samples and material.
+ * Closed embedded roots preserve every resting surface face.
  * GPU buffers are replaced atomically on topology changes; never resized in place.
  * The original surface is retained verbatim and restored after the last extension.
  */
@@ -32,19 +34,13 @@ export class BoundaryExtrusions {
   this.restCount=mesh.geometry.attributes.position.count;this.baseIndex=Array.from(mesh.geometry.index!.array);
  }
  add(source:number[],target:number[],side:number,seed:number,sampleTarget:MozzarellaExtrusion['sampleTarget'],targetAttribute:MozzarellaExtrusion['targetAttribute']):MozzarellaExtrusion|undefined{
-  const occupied=new Set(this.pulls.flatMap(p=>p.lanes.map(l=>`${l.source[0]}:${l.source[1]}`)));
-  const lanes:Lane[]=[];
-  for(let i=0;i<Math.min(source.length,target.length)-1;i++){
-   if(source[i]===source[i+1]||target[i]===target[i+1]||occupied.has(`${source[i]}:${source[i+1]}`))continue;
-   lanes.push({source:[source[i],source[i+1]],target:[target[i],target[i+1]],first:0,limit:.76+rand(seed+i*47)*.24,brokenAt:-1,cut:9+Math.floor(rand(seed+i*31)*9)});
-  }
-  if(!lanes.length)return;
-  // Keep anchors local to the exact selected contiguous source region.
-  // Vary the material flow independently of the uniformly tessellated source edge.
-  const hero=Math.floor(rand(seed+701)*lanes.length),weights=lanes.map((_,i)=>i===hero?2.4:.28+rand(seed+i*53+709)*1.05),sum=weights.reduce((a,b)=>a+b,0),core=[0];
+  if(source.length<2||target.length<2||this.pulls.some(p=>p.side===side&&p.source.slice(0,-1).some(id=>source.slice(0,-1).includes(id))))return;
+  const count=2+Math.floor(rand(seed+701)*3),lanes:Lane[]=[],weights=Array.from({length:count},(_,i)=>i===Math.floor(rand(seed+719)*count)?2.2:.35+rand(seed+i*53+709)*.8),sum=weights.reduce((a,b)=>a+b,0),core=[0];
   for(const width of weights)core.push(core[core.length-1]+width/sum);
+  const pair=(ids:number[],u:number):[number,number]=>{const i=Math.min(ids.length-2,Math.floor(u*(ids.length-1)));return [ids[i],ids[i+1]];};
+  for(let i=0;i<count;i++)lanes.push({source:pair(source,(core[i]+core[i+1])*.5),target:pair(target,(core[i]+core[i+1])*.5),u0:core[i],u1:core[i+1],first:0,limit:.66+rand(seed+i*47)*.34,brokenAt:-1,cut:9+Math.floor(rand(seed+i*31)*9)});
   const holes=lanes.slice(1).map((_,i)=>({center:.25+rand(seed+i*59+719)*.50,span:.15+rand(seed+i*61+727)*.24,width:.72+rand(seed+i*67+733)*.25,phase:rand(seed+i*71+739)*6.28}));
-  const pull:MozzarellaExtrusion={source:[...new Set(lanes.flatMap(l=>l.source))],target:[...new Set(lanes.flatMap(l=>l.target))],side,seed,active:true,lanes,sampleTarget,targetAttribute,core,holes,sourcePoints:[],targetPoints:[]};
+  const pull:MozzarellaExtrusion={source:[...source],target:[...target],side,seed,active:true,visible:false,lanes,sampleTarget,targetAttribute,core,holes,sourcePoints:[],targetPoints:[]};
   pull.sourcePoints=pull.source.map(()=>new T.Vector3());pull.targetPoints=pull.target.map(()=>new T.Vector3());
   this.pulls.push(pull);this.rebuild();return pull;
  }
@@ -65,10 +61,7 @@ export class BoundaryExtrusions {
   // An enclosed lens, not a full-length slot: neighboring paths rejoin above/below it.
   return Math.sqrt(Math.max(0,1-d*d))*hole.width*opening;
  }
- private id(l:Lane,row:number,col:number,bottom=false){
-  if(row===0)return l.source[col===2?1:0]+(bottom?this.topCount:0);
-  return l.first+(bottom?LAYER:0)+(row-1)*ACROSS+col;
- }
+ private id(l:Lane,row:number,col:number,bottom=false){return l.first+(bottom?LAYER:0)+row*ACROSS+col;}
  private rebuild(){
   const old=this.mesh.geometry,total=this.restCount+this.pulls.reduce((n,p)=>n+p.lanes.length*LAYER*2,0),g=new T.BufferGeometry();
   for(const [name,attr] of Object.entries(old.attributes)){
@@ -77,8 +70,8 @@ export class BoundaryExtrusions {
    let first=this.restCount;
    for(const p of this.pulls)for(const lane of p.lanes){
     if(lane.first>=this.restCount)next.set((previous.array as Float32Array).subarray(lane.first*attr.itemSize,(lane.first+2*LAYER)*attr.itemSize),first*attr.itemSize);
-    else for(let layer=0;layer<2;layer++)for(let row=1;row<=ROWS;row++)for(let col=0;col<ACROSS;col++){
-     const u=col/(ACROSS-1),a=lane.source[0]+layer*this.topCount,b=lane.source[1]+layer*this.topCount,id=first+layer*LAYER+(row-1)*ACROSS+col;
+    else for(let layer=0;layer<2;layer++)for(let row=0;row<=ROWS;row++)for(let col=0;col<ACROSS;col++){
+     const u=col/(ACROSS-1),a=lane.source[0]+layer*this.topCount,b=lane.source[1]+layer*this.topCount,id=first+layer*LAYER+row*ACROSS+col;
      for(let k=0;k<attr.itemSize;k++)next[id*attr.itemSize+k]=T.MathUtils.lerp(previous.array[a*attr.itemSize+k],previous.array[b*attr.itemSize+k],u);
     }
     first+=2*LAYER;
@@ -90,15 +83,10 @@ export class BoundaryExtrusions {
   old.dispose();
  }
  private reindex(){
-  const removed=new Set<string>();for(const p of this.pulls)for(const l of p.lanes)removed.add([l.source[0],l.source[1]].sort((a,b)=>a-b).join(':'));
-  const indices:number[]=[];
-  for(let i=0;i<this.baseIndex.length;i+=3){
-   const tri=this.baseIndex.slice(i,i+3),mixed=tri.some(n=>n<this.topCount)&&tri.some(n=>n>=this.topCount);
-   const edge=[...new Set(tri.map(n=>n%this.topCount))].sort((a,b)=>a-b).join(':');
-   if(!mixed||!removed.has(edge))indices.push(...tri);
-  }
+  const indices:number[]=[...this.baseIndex];
   this.mesh.geometry.userData.extrusionFaceStart=indices.length/3;
   for(const pull of this.pulls)for(const lane of pull.lanes){
+   if(!pull.visible)continue;
    const tri=(a:number,b:number,c:number)=>{if(a!==b&&b!==c&&a!==c)indices.push(...(pull.side<0?[a,c,b]:[a,b,c]));};
    const quad=(a:number,b:number,c:number,d:number)=>{tri(a,c,b);tri(b,c,d);};
    for(let row=0;row<ROWS;row++){
@@ -116,10 +104,10 @@ export class BoundaryExtrusions {
     const a=this.id(lane,row,col),b=this.id(lane,row,col+1),c=this.id(lane,row,col,true),d=this.id(lane,row,col+1,true);
     if(reverse)quad(a,b,c,d);else quad(b,a,d,c);
    }};
-   cap(ROWS,true);if(lane.brokenAt>=0){cap(lane.cut,true);cap(lane.cut+1,false);}
+   cap(0,false);cap(ROWS,true);if(lane.brokenAt>=0){cap(lane.cut,true);cap(lane.cut+1,false);}
   }
   const g=this.mesh.geometry;
-  if(!g.index)g.setIndex(new T.BufferAttribute(new Uint32Array(indices),1).setUsage(T.DynamicDrawUsage));
+  if(!g.index){const capacity=this.baseIndex.length+this.pulls.reduce((n,p)=>n+p.lanes.length*(ROWS*36+48),0),buffer=new Uint32Array(capacity);buffer.set(indices);g.setIndex(new T.BufferAttribute(buffer,1).setUsage(T.DynamicDrawUsage));}
   else { (g.index.array as Uint32Array).fill(0);(g.index.array as Uint32Array).set(indices);g.index.needsUpdate=true; }
   g.setDrawRange(0,indices.length);this.dirty=false;
  }
@@ -131,27 +119,30 @@ export class BoundaryExtrusions {
   const sourceCenter=this.srcCenter.set(0,0,0),targetCenter=this.dstCenter.set(0,0,0);
   for(let i=0;i<pull.source.length;i++)sourceCenter.add(pull.sourcePoints[i].fromBufferAttribute(pos,pull.source[i]).applyMatrix4(this.mesh.matrixWorld));sourceCenter.multiplyScalar(1/pull.source.length);
   for(let i=0;i<pull.target.length;i++){pull.sampleTarget(pull.target[i],pull.targetPoints[i]);targetCenter.add(pull.targetPoints[i]);}targetCenter.multiplyScalar(1/pull.target.length);
+  const visible=sourceCenter.distanceTo(targetCenter)>.018;
+  if(pull.visible!==visible){pull.visible=visible;this.dirty=true;}
+  if(!visible){if(this.dirty)this.reindex();return;}
   if(state.broken&&!pull.fragments){
    const split=Math.round(state.breakPoint*(curve.points.length-1)-.5);
    pull.fragments=[new T.CatmullRomCurve3(curve.points.slice(0,split+1),false,'centripetal'),new T.CatmullRomCurve3(curve.points.slice(split+1),false,'centripetal')];
   }
   // Intact lanes share one centerline: sample it once, not three times per lane.
   for(let row=1;row<=ROWS;row++){const t=row/ROWS,k=(row-1)*6;curve.getPoint(t,this.center);curve.getPoint(Math.max(0,t-.008),this.before);curve.getPoint(Math.min(1,t+.008),this.after);this.tangent.copy(this.after).sub(this.before).normalize();this.center.toArray(this.rowCurves,k);this.tangent.toArray(this.rowCurves,k+3);}
-  const relative=state.length/Math.max(.1,state.limit),perforation=T.MathUtils.smoothstep(state.length,.12,1.15);
+  const relative=state.length/Math.max(.1,state.limit),perforation=T.MathUtils.smoothstep(state.length,.16,.95);
   for(let laneIndex=0;laneIndex<pull.lanes.length;laneIndex++){
    const lane=pull.lanes[laneIndex];
    if(lane.brokenAt<0&&(state.broken||relative>lane.limit)){lane.brokenAt=state.time;this.dirty=true;}
-   this.a.fromBufferAttribute(pos,lane.source[0]).applyMatrix4(this.mesh.matrixWorld);this.b.fromBufferAttribute(pos,lane.source[1]).applyMatrix4(this.mesh.matrixWorld);
-   pull.sampleTarget(lane.target[0],this.c);pull.sampleTarget(lane.target[1],this.d);
+   this.boundary(pull.sourcePoints,lane.u0,this.a);this.boundary(pull.sourcePoints,lane.u1,this.b);
+   this.boundary(pull.targetPoints,lane.u0,this.c);this.boundary(pull.targetPoints,lane.u1,this.d);
    const tearAge=lane.brokenAt<0?0:Math.max(0,state.time-lane.brokenAt);
    const tip=(lane.cut+.5)/ROWS,neck=T.MathUtils.smoothstep(relative/lane.limit,.84,1);
-   for(let row=1;row<=ROWS;row++){
+   for(let row=0;row<=ROWS;row++){
     const t=row/ROWS,onLeft=row<=lane.cut,freeEnd=onLeft?lane.cut/ROWS:(lane.cut+1)/ROWS;
     let pathT=t;
     if(lane.brokenAt>=0){const recoil=(1-Math.exp(-tearAge*7))*.26;pathT=onLeft?t*(1-recoil):1-(1-t)*(1-recoil);}
     const fragment=pull.fragments?.[onLeft?0:1];
     const uPath=onLeft?Math.min(1,pathT/(lane.cut/ROWS)):Math.max(0,(pathT-(lane.cut+1)/ROWS)/(1-(lane.cut+1)/ROWS));
-    if(lane.brokenAt<0){this.center.fromArray(this.rowCurves,(row-1)*6);this.tangent.fromArray(this.rowCurves,(row-1)*6+3);}else{
+    if(lane.brokenAt<0){if(row===0){this.center.copy(curve.points[0]);this.tangent.copy(curve.points[1]).sub(this.center).normalize();}else{this.center.fromArray(this.rowCurves,(row-1)*6);this.tangent.fromArray(this.rowCurves,(row-1)*6+3);}}else{
     if(fragment)fragment.getPoint(uPath,this.center);else curve.getPoint(pathT,this.center);
     (fragment??curve).getPoint(Math.max(0,(fragment?uPath:pathT)-.008),this.before);(fragment??curve).getPoint(Math.min(1,(fragment?uPath:pathT)+.008),this.after);this.tangent.copy(this.after).sub(this.before).normalize();
     }
@@ -183,8 +174,7 @@ export class BoundaryExtrusions {
      this.offset.copy(this.rootLeft).lerp(this.rootRight,laneU).sub(sourceCenter).multiplyScalar(1-t);
      this.offset.addScaledVector(this.p.copy(this.farLeft).lerp(this.farRight,laneU).sub(targetCenter),t);
      this.p.copy(this.center).add(this.offset);
-     // Shared sag keeps joined regions continuous; depth is inherited from the particle chain.
-     this.p.y-=edge*.010*perforation;
+     if(pull.sampleSurface&&lane.brokenAt<0){const leftU=T.MathUtils.lerp(lane.u0,left,morph),rightU=T.MathUtils.lerp(lane.u1,right,morph);pull.sampleSurface(T.MathUtils.lerp(leftU,rightU,laneU),t,this.p);}
      if(gather>0){
       const travel=onLeft?t/(lane.cut/ROWS):(1-t)/(1-(lane.cut+1)/ROWS);
       const rootA=onLeft?this.a:this.c,rootB=onLeft?this.b:this.d;
@@ -197,18 +187,25 @@ export class BoundaryExtrusions {
      }
      this.p.applyMatrix4(this.inv);
      const thick=T.MathUtils.lerp((.0025+.007*root)/Math.sqrt(1+state.length*1.2),.014*settle,gather)*(.65+.35*Math.sin(Math.PI*u));
-     const top=lane.first+(row-1)*ACROSS+col,bottom=top+LAYER;
+     const top=lane.first+row*ACROSS+col,bottom=top+LAYER;
      pos.setXYZ(top,this.p.x+this.normal.x*thick*.5,this.p.y+this.normal.y*thick*.5,this.p.z+this.normal.z*thick*.5);
      pos.setXYZ(bottom,this.p.x-this.normal.x*thick*.5,this.p.y-this.normal.y*thick*.5,this.p.z-this.normal.z*thick*.5);
      normal.setXYZ(top,this.normal.x,this.normal.y,this.normal.z);normal.setXYZ(bottom,-this.normal.x,-this.normal.y,-this.normal.z);
      // Material coordinates are sampled from the source surface, never reset to 0..1 per strip.
-     if(!pull.uvReady)for(const key of ['uv','uv1']){const attr=g.attributes[key];const x=T.MathUtils.lerp(T.MathUtils.lerp(attr.getX(lane.source[0]),attr.getX(lane.source[1]),u),T.MathUtils.lerp(pull.targetAttribute(lane.target[0],key,0),pull.targetAttribute(lane.target[1],key,0),u),t),y=T.MathUtils.lerp(T.MathUtils.lerp(attr.getY(lane.source[0]),attr.getY(lane.source[1]),u),T.MathUtils.lerp(pull.targetAttribute(lane.target[0],key,1),pull.targetAttribute(lane.target[1],key,1),u),t);attr.setXY(top,x,y);attr.setXY(bottom,x,y);}
+     if(!pull.uvReady)for(const key of ['uv','uv1']){
+      const attr=g.attributes[key],v=T.MathUtils.lerp(lane.u0,lane.u1,u);
+      const sample=(ids:number[],target:boolean,k:number)=>{const f=v*(ids.length-1),i=Math.min(ids.length-2,Math.floor(f));return T.MathUtils.lerp(target?pull.targetAttribute(ids[i],key,k):attr.array[ids[i]*attr.itemSize+k],target?pull.targetAttribute(ids[i+1],key,k):attr.array[ids[i+1]*attr.itemSize+k],f-i);};
+      const x=T.MathUtils.lerp(sample(pull.source,false,0),sample(pull.target,true,0),t),y=T.MathUtils.lerp(sample(pull.source,false,1),sample(pull.target,true,1),t);attr.setXY(top,x,y);attr.setXY(bottom,x,y);
+     }
      sss.setX(top,T.MathUtils.clamp(thick/.025,.035,.55));sss.setX(bottom,sss.getX(top));
-     if(row===ROWS){
-      this.p.copy(this.c).lerp(this.d,u).applyMatrix4(this.inv);pos.setXYZ(top,this.p.x,this.p.y,this.p.z);
-      pull.sampleTarget(lane.target[0],this.targetLeft,true);pull.sampleTarget(lane.target[1],this.targetRight,true);
-      this.p.copy(this.targetLeft).lerp(this.targetRight,u).applyMatrix4(this.inv);pos.setXYZ(bottom,this.p.x,this.p.y,this.p.z);
-      sss.setX(top,T.MathUtils.lerp(pull.targetAttribute(lane.target[0],'sssThickness',0),pull.targetAttribute(lane.target[1],'sssThickness',0),u));
+     if(row===0||row===ROWS){
+      const atSource=row===0,points=atSource?pull.sourcePoints:pull.targetPoints;
+      this.boundary(points,T.MathUtils.lerp(lane.u0,lane.u1,u),this.p).applyMatrix4(this.inv);
+      // Bury a closed root skin slightly into its own mozzarella, not the dough.
+      const rootThickness=.003;
+      pos.setXYZ(top,this.p.x,this.p.y-.001,this.p.z);
+      pos.setXYZ(bottom,this.p.x,this.p.y-rootThickness,this.p.z);
+
      }
     }
    }

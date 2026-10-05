@@ -104,17 +104,17 @@ export class PizzaSlice {
    for(const hit of local)if(hit.faceIndex!<(this.geometry.userData.extrusionFaceStart??Infinity))hits.push(hit);
   };
  }
- private boundaryPatch(side:number,r:number){
-  const edges=this.cheeseBoundary[side<0?0:1];
-  const nearest=edges.findIndex(e=>r>=e.r0-.003&&r<=e.r1+.003);if(nearest<0)return;
-  let lo=nearest,hi=nearest;
-  // A short real surface boundary feeds 2–4 lanes. Never bridge over bare sauce.
-  while(hi-lo<3){
-   if(lo>0&&edges[lo-1].b===edges[lo].a){lo--;continue;}
-   if(hi+1<edges.length&&edges[hi].b===edges[hi+1].a){hi++;continue;}break;
+ /** Contiguous, globally sampled cheese cut intervals. Cap unsupported root span. */
+ mozzarellaIntervals(side:number){
+  const edges=this.cheeseBoundary[side<0?0:1],regions:{r0:number,r1:number,vertices:number[]}[]=[];
+  for(const edge of edges){
+   const last=regions[regions.length-1];
+   if(last&&last.vertices[last.vertices.length-1]===edge.a&&edge.r1-last.r0<=.44){last.r1=edge.r1;last.vertices.push(edge.b);}
+   else regions.push({r0:edge.r0,r1:edge.r1,vertices:[edge.a,edge.b]});
   }
-  return [edges[lo].a,...edges.slice(lo,hi+1).map(e=>e.b)];
+  return regions.filter(region=>region.r1-region.r0>.035);
  }
+ private boundaryPatch(side:number,r:number){return this.mozzarellaIntervals(side).find(region=>r>=region.r0&&r<=region.r1)?.vertices;}
  canExtrudeMozzarella(side:number,r:number){return !!this.cheeseMesh&&!!this.boundaryPatch(side,r);}
  private cheeseVertexWorld(index:number,out:T.Vector3){
   if(!this.cheeseMesh)return out.set(0,0,0);
@@ -176,7 +176,7 @@ export class PizzaSlice {
    if(j<16&&side<4){const n=j*5+side;indices.push(n,n+5,n+1,n+1,n+5,n+6);}
   }
   const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(positions,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setAttribute('color',new T.Float32BufferAttribute(colors,3));g.setAttribute('sssThickness',new T.BufferAttribute(new Float32Array(positions.length/3).fill(.12),1));g.setIndex(indices);g.computeVertexNormals();
-  const leaf=new T.Mesh(g,this.materials.basil);leaf.name='Basil';const x=Math.cos(a)*r,z=Math.sin(a)*r;leaf.position.set(x-this.home.x,cheeseHeight(x,z)+.015,z-this.home.z);leaf.rotation.y=rand(seed+2)*6;leaf.rotation.z=(rand(seed+3)-.5)*.35;leaf.rotation.x=(rand(seed+4)-.5)*.3;leaf.scale.set(.85+rand(seed+5)*.3,1,.85+rand(seed+6)*.3);this.group.add(leaf);this.toppings.push({mesh:leaf,base:leaf.position.clone(),rotation:leaf.quaternion.clone(),binding:this.cloth.bind(leaf.position.x,leaf.position.z)});
+  const leaf=new T.Mesh(g,this.materials.basil);leaf.name='Basil';const x=Math.cos(a)*r,z=Math.sin(a)*r;leaf.position.set(x-this.home.x,(cheeseField(x,z)>=CHEESE_EDGE?cheeseHeight(x,z):SAUCE_TOP+shoulderHeight(x,z))+.008,z-this.home.z);leaf.rotation.y=rand(seed+2)*6;leaf.rotation.z=(rand(seed+3)-.5)*.35;leaf.rotation.x=(rand(seed+4)-.5)*.3;leaf.scale.set(.85+rand(seed+5)*.3,1,.85+rand(seed+6)*.3);this.group.add(leaf);this.toppings.push({mesh:leaf,base:leaf.position.clone(),rotation:leaf.quaternion.clone(),binding:this.cloth.bind(leaf.position.x,leaf.position.z)});
  }
  deformation(x:number,z:number){sample.set(x,DOUGH_NEUTRAL,z);return this.cloth.deform(sample,deformed).y-DOUGH_NEUTRAL;}
  updateGeometry(onlyCheese=false,alpha=1){

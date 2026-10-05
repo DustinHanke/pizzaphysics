@@ -21,7 +21,7 @@ function closedExtensions(){
 }
 function validate(){
  for(const s of slices){const mesh=cheeseMesh(s),g=mesh.geometry,count=g.attributes.position.count;
-  peakVertices=Math.max(peakVertices,count);
+  peakVertices=Math.max(peakVertices,count);assert.deepEqual(Array.from(g.index!.array).slice(0,original[s.id].index.length),original[s.id].index,'bridge removed resting surface faces');
   for(const [name,attr] of Object.entries(g.attributes)){assert.equal(attr.count,count,name+' count mismatch');for(const value of attr.array)assert(Number.isFinite(value),name+' has NaN');}
   for(const index of g.index!.array)assert(index>=0&&index<count,'invalid triangle index');
   assert.equal(mesh.material,materials.cheese,'surface material changed');assert(Number.isFinite(g.boundingSphere!.radius));assert(g.boundingSphere!.radius<12,'exploded bounds');
@@ -29,7 +29,7 @@ function validate(){
 }
 for(let cycle=0;cycle<4;cycle++){
  cheese.spawn(moving);const primaries=cheese.strands.filter(s=>s.extrusion);assert(primaries.length>=2,'missing boundary extensions');
- const used=new Set<string>();for(const strand of primaries)for(const lane of strand.extrusion!.lanes){const key=lane.source.join(':');assert(!used.has(key),'duplicate primary root');used.add(key);totalLanes++;}
+ const used=new Set<string>();for(const strand of primaries)for(const lane of strand.extrusion!.lanes){const key=`${strand.side}:${strand.r}:${lane.u0}`;assert(!used.has(key),'duplicate primary root');used.add(key);totalLanes++;}
  moving.group.position.add(new T.Vector3(.20,.55,.1));moving.group.rotation.set(.11,-.07,.15);moving.detached=true;
  // Include actual cloth sag, rendered surface updates and physics independently.
  for(let i=0;i<100;i++){
@@ -41,13 +41,13 @@ for(let cycle=0;cycle<4;cycle++){
  for(let i=0;i<particles.length;i++)particles[i].forEach((p,j)=>assert(p.equals(cheese.strands[i].points[j]),'render mutated solver particles'));
  for(const strand of primaries){const ex=strand.extrusion!,mesh=cheeseMesh(moving),g=mesh.geometry,target=cheeseMesh(strand.neighbor);mesh.updateWorldMatrix(true,false);target.updateWorldMatrix(true,false);
   for(const lane of ex.lanes){
-   const last=lane.first+27*3;
-   for(const c of [0,2]){p.fromBufferAttribute(g.attributes.position,last+c).applyMatrix4(mesh.matrixWorld);q.fromBufferAttribute(target.geometry.attributes.position,lane.target[c===0?0:1]).applyMatrix4(target.matrixWorld);assert(p.distanceTo(q)<1e-5,'far endpoint detached from mozzarella');}
+   const last=lane.first+28*3;
+   for(const c of [0,2]){p.fromBufferAttribute(g.attributes.position,last+c).applyMatrix4(mesh.matrixWorld);const u=c===0?lane.u0:lane.u1,f=u*(ex.target.length-1),j=Math.min(ex.target.length-2,Math.floor(f));q.fromBufferAttribute(target.geometry.attributes.position,ex.target[j]).lerp(new T.Vector3().fromBufferAttribute(target.geometry.attributes.position,ex.target[j+1]),f-j).applyMatrix4(target.matrixWorld);assert(p.distanceTo(q)<.0011,'far endpoint detached from mozzarella');}
   }
   const edges=new Map<string,number>();const id=g.index!;for(let i=0;i<id.count;i+=3)for(let j=0;j<3;j++){const a=id.getX(i+j),b=id.getX(i+(j+1)%3);if(a===b)continue;const key=a<b?`${a}:${b}`:`${b}:${a}`;edges.set(key,(edges.get(key)??0)+1);}
-  for(const lane of ex.lanes){const [a,b]=lane.source,key=a<b?`${a}:${b}`:`${b}:${a}`;assert.equal(edges.get(key),2,'extrusion root is nonmanifold');}
+  for(const lane of ex.lanes){const [a,b]=lane.source,key=a<b?`${a}:${b}`:`${b}:${a}`;assert.equal(edges.get(key),2,'resting topping boundary was opened');}
  }
- if(cycle===0){const m=cheeseMesh(moving);writeFileSync('/tmp/pizza-pull-geometry.json',JSON.stringify({position:Array.from(m.geometry.attributes.position.array),index:Array.from(m.geometry.index!.array),base:original[1].position.length/3,matrix:m.matrixWorld.toArray(),ranges:primaries.filter(s=>s.extrusion!.lanes.length>=3).slice(0,1).flatMap(s=>s.extrusion!.lanes.map(l=>[l.first,l.first+168]))}));}
+ if(cycle===0){const m=cheeseMesh(moving);writeFileSync('/tmp/pizza-pull-geometry.json',JSON.stringify({position:Array.from(m.geometry.attributes.position.array),index:Array.from(m.geometry.index!.array),base:original[1].position.length/3,matrix:m.matrixWorld.toArray(),ranges:primaries.filter(s=>s.extrusion!.lanes.length>=3).slice(0,1).flatMap(s=>s.extrusion!.lanes.map(l=>[l.first,l.first+174]))}));}
  closedExtensions();
  // Start a local tear; return toward rest must never heal it.
  for(const strand of primaries){strand.hardLimit=Math.max(.1,strand.length*.9);strand.render();assert(strand.extrusion!.lanes.some(l=>l.brokenAt>=0));const broken=strand.extrusion!.lanes.map(l=>l.brokenAt);strand.hardLimit=100;strand.render();assert.deepEqual(strand.extrusion!.lanes.map(l=>l.brokenAt),broken);}

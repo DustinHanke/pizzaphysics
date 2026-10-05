@@ -14,7 +14,7 @@ function closed(mesh:T.Mesh){
 // Check actual active geometry, including secondary batches and membrane shells.
 const meshes=new Set<T.Mesh>();for(const strand of system.strands)for(const renderer of strand.renders)meshes.add(renderer.mesh);
 for(const web of system.webs){meshes.add(web.renderer.mesh);for(const membrane of web.membranes)meshes.add(membrane.mesh);}
-assert(meshes.size>0);for(const mesh of meshes)closed(mesh);
+assert(system.strands.some(s=>s.extrusion),'missing local bridges');for(const mesh of meshes)closed(mesh);
 for(const web of system.webs)for(const membrane of web.membranes)for(let bucket=0;bucket<=14;bucket++){membrane.tear=bucket/14;membrane.render(1);closed(membrane.mesh);}
 // Direct fixture isolates one batch slot. The two skins remain close together,
 // carry identical source UVs, and neck locally rather than disappearing.
