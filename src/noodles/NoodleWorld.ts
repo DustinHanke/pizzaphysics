@@ -216,8 +216,8 @@ export class NoodleWorld {
         p.y -= gravity * dt * dt;
         const nearLeft = Math.max(0, 1 - i / 7);
         const nearRight = Math.max(0, 1 - (SEGMENTS - i) / 7);
-        prev.addScaledVector(leftMotion, -nearLeft * .33);
-        prev.addScaledVector(rightMotion, -nearRight * .33);
+        old.addScaledVector(leftMotion, -nearLeft * .33);
+        old.addScaledVector(rightMotion, -nearRight * .33);
       }
       lambdas.fill(0);
       for (let pass = 0; pass < SOLVER_PASSES; pass++) {
