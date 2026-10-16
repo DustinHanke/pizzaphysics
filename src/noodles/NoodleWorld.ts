@@ -33,6 +33,7 @@ export class NoodleWorld {
   readonly rightTarget = this.right.clone();
   strands: NoodleStrand[] = [];
   steps = 0;
+  private lastFoldTotalLength = INITIAL_LENGTH;
 
   constructor() { this.reset(); }
 
@@ -66,6 +67,7 @@ export class NoodleWorld {
     this.rightTarget.copy(this.right);
     this.accumulator = 0;
     this.steps = 0;
+    this.lastFoldTotalLength = INITIAL_LENGTH;
     this.createStrands(1, INITIAL_LENGTH);
   }
 
@@ -94,10 +96,17 @@ export class NoodleWorld {
     return Math.round(T.MathUtils.clamp((span / Math.max(.01, this.materialLength) - .76) / .27, 0, 1) * 100);
   }
 
+  /** A new fold requires additional extension since the previous fold. */
+  get canFold() {
+    return this.strandCount < MAX_STRANDS && this.materialLength >= 2.55
+      && this.totalLength >= this.lastFoldTotalLength * 1.22;
+  }
+
   /** Folding halves each strand's rest length and doubles their count.
    * This conserves the modeled dough volume before the next pull. */
   fold() {
-    if (this.strandCount >= MAX_STRANDS || this.materialLength < 2.55) return false;
+    if (!this.canFold) return false;
+    const before = this.totalLength;
     const length = this.materialLength * .5;
     const halfSpan = Math.min(1.15, length * .35);
     const center = tmp.copy(this.left).add(this.right).multiplyScalar(.5);
@@ -107,6 +116,7 @@ export class NoodleWorld {
     this.leftTarget.copy(this.left);
     this.rightTarget.copy(this.right);
     this.createStrands(this.strandCount * 2, length);
+    this.lastFoldTotalLength = before;
     this.accumulator = 0;
     return true;
   }
