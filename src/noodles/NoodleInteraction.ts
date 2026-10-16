@@ -32,7 +32,8 @@ export class NoodleInteraction {
     private camera: T.PerspectiveCamera,
     private world: NoodleWorld,
     private grips: { left: T.Mesh; right: T.Mesh },
-    private onPull: () => void
+    private onPull: () => void,
+    private onFoldGesture: () => void
   ) {
     canvas.addEventListener('pointerdown', this.down);
     canvas.addEventListener('pointermove', this.move);
@@ -57,12 +58,12 @@ export class NoodleInteraction {
   }
 
   private down = (e: PointerEvent) => {
-    if (this.pointer !== null || this.orbitPointer !== null) return;
+    if (this.pointer !== null || this.orbitPointer !== null || this.world.folding) return;
     this.cast(e);
     const grip = this.ray.intersectObjects([this.grips.left, this.grips.right])[0];
     // Large invisible pointer tolerance for finger-sized targets on mobile.
-    const dl = this.ray.ray.distanceToPoint(this.world.left);
-    const dr = this.ray.ray.distanceToPoint(this.world.right);
+    const dl = this.ray.ray.distanceToPoint(this.grips.left.position);
+    const dr = this.ray.ray.distanceToPoint(this.grips.right.position);
     const nearby = Math.min(dl, dr) < .58 ? (dl < dr ? 'left' : 'right') : null;
     const side = grip ? grip.object.userData.side as 'left' | 'right' : nearby;
     const orbitGesture = e.button === 1 || e.button === 2 || e.shiftKey || e.altKey;
@@ -70,7 +71,7 @@ export class NoodleInteraction {
       this.activeSide = side;
       this.pointer = e.pointerId;
       this.camera.getWorldDirection(facing);
-      const handle = this.world[this.activeSide];
+      const handle = this.grips[this.activeSide].position;
       this.plane.setFromNormalAndCoplanarPoint(facing, handle);
       this.dragOffset.copy(handle).sub(grip ? grip.point : this.ray.ray.closestPointToPoint(handle, point));
       this.canvas.classList.add('dragging');
@@ -106,7 +107,13 @@ export class NoodleInteraction {
   };
 
   private up = (e: PointerEvent) => {
-    if (e.pointerId === this.pointer) { this.pointer = null; this.activeSide = null; this.canvas.classList.remove('dragging'); }
+    if (e.pointerId === this.pointer) {
+      const shouldFold = this.world.canFold && this.world.leftTarget.distanceTo(this.world.rightTarget) < 1.35;
+      this.pointer = null;
+      this.activeSide = null;
+      this.canvas.classList.remove('dragging');
+      if (shouldFold) this.onFoldGesture();
+    }
     if (e.pointerId === this.orbitPointer) { this.orbitPointer = null; this.canvas.classList.remove('orbiting'); }
     if (this.canvas.hasPointerCapture(e.pointerId)) this.canvas.releasePointerCapture(e.pointerId);
   };
