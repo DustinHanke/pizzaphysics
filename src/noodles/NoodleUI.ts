@@ -6,38 +6,38 @@ export function mountNoodleUI(settings: NoodleSettings) {
   <main class="experiment noodle-experiment">
     <header class="masthead">
       <h1 class="wordmark">Noodle<span>Physics</span><i aria-hidden="true">.</i></h1>
-      <div class="intro"><p>The art of the pull.</p><span>Fresh dough. A little physics.</span></div>
+      <div class="intro"><p>One dough. A thousand possibilities.</p><span>A hands-on study in stretching &amp; folding.</span></div>
       <span class="project-tag">PULL / FOLD / REPEAT</span>
     </header>
     <section class="stage" aria-label="Hand-pulled noodle interaction">
-      <div class="stage-caption"><span>HAND-PULLED NOODLES — EXPERIMENT 01</span><span>Made to be stretched.</span></div>
+      <div class="stage-caption"><span>LĀMIÀN / THE DOUGH STUDY · Nº 02</span><span>From a single pull.</span></div>
       <canvas id="scene" tabindex="0" aria-label="Interactive strand of dough. Drag either dough grip to stretch. Drag empty space to orbit, scroll to zoom. Press F to fold and R to reset."></canvas>
-      <div class="pull-hint" id="hint"><span class="hint-mark" aria-hidden="true">↔</span><span>Grab either end. Pull the dough.</span></div>
+      <div class="pull-hint" id="hint"><span class="hint-mark" aria-hidden="true">↔</span><span>Pinch an end. Draw it out.</span></div>
     </section>
     <div class="stage-actions">
-      <span class="gesture-note">Drag either end to pull · Empty space to orbit · Scroll to zoom</span>
+      <span class="gesture-note">Pull the dough apart · Bring the ends together to fold · Scroll to zoom</span>
       <div class="view-actions">
         <button id="camera-reset" title="Reset camera (C)">Reset view</button>
-        <button id="fold" title="Fold and double the strands (F)">Fold dough <span aria-hidden="true">↶</span></button>
+        <button id="fold" title="Fold and double the strands (F)">Fold &amp; double <span aria-hidden="true">↶</span></button>
         <button id="reset" title="Start with fresh dough (R)">Fresh start <span aria-hidden="true">↻</span></button>
       </div>
     </div>
     <section class="telemetry" aria-label="Live measurements">
       <div class="section-heading"><span class="indicator"></span> THE PULL, IN NUMBERS</div>
       <dl>
-        <div><dt>Draw length</dt><dd><span id="length">0</span><small>cm</small></dd></div>
+        <div><dt>Total dough length</dt><dd><span id="length">0</span><small>cm</small></dd></div>
         <div><dt>Strands</dt><dd id="strands">1</dd></div>
         <div><dt>Thickness</dt><dd><span id="thickness">9.0</span><small>mm</small></dd></div>
-        <div class="secondary"><dt>Dough extension</dt><dd><span id="stretch">100</span><small>%</small></dd></div>
+        <div class="secondary"><dt>Elongation</dt><dd><span id="stretch">100</span><small>%</small></dd></div>
       </dl>
       <div class="integrity"><div><span>Pull tension</span><span id="tension">0%</span></div><div class="track"><i id="tension-bar"></i></div></div>
       <p id="status" role="status">DOUGH READY TO PULL</p>
     </section>
     <aside class="controls">
-      <div class="controls-intro"><span class="small-label">A STUDY IN HAND-PULLED DOUGH</span><h2>Stretch.<br><em>Fold.</em></h2><p>Draw the dough until it grows thin, then fold to double the strands. A simple approximation of the real craft.</p></div>
+      <div class="controls-intro"><span class="small-label">A STUDY IN HAND-PULLED DOUGH</span><h2>The perfect<br><em>pull.</em></h2><p>Pinch the dough at either end and draw it out. Watch the strand grow thinner under tension. When it's long enough, fold it back on itself and pull again.</p></div>
       <button class="controls-toggle" aria-expanded="true" aria-controls="control-body"><span>Adjust the feel</span><span class="toggle-symbol">−</span></button>
       <div id="control-body"></div>
-      <p class="specimen-note">Pulled, never extruded.<br><span>Flour · Water · Patience</span></p>
+      <p class="specimen-note">A little science. A lot of flour.<br><span>01 Pull · 02 Fold · 03 Repeat</span></p>
     </aside>
     <footer><span>NOODLE PHYSICS <i>—</i> A little food for curiosity. <i>·</i> <a href="https://pizza.dustinhanke.de" target="_blank" rel="noopener noreferrer">Try Pizza Physics</a></span>
       <span class="performance"><span id="fps">—</span> FPS <i>/</i> <span id="physics">—</span> MS PHYSICS</span></footer>
