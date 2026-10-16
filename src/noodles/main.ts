@@ -16,7 +16,9 @@ async function start() {
   const { scene, camera, renderer, resolution, key } = await createScene(canvas);
   const noodles = new NoodleRenderer(scene);
   const hint = document.querySelector('#hint')!;
-  const controller = new NoodleInteraction(canvas, camera, world, noodles.grips, () => hint.classList.add('hidden'));
+  const controller = new NoodleInteraction(canvas, camera, world, noodles.grips,
+    () => hint.classList.add('hidden'),
+    () => { if (world.fold()) { noodles.update(world); hint.classList.add('hidden'); } });
   const reset = () => {
     controller.release();
     world.reset();
@@ -75,7 +77,10 @@ async function start() {
       fields.tension.textContent = `${world.tension}%`;
       fields['tension-bar'].style.width = `${world.tension}%`;
       fields['tension-bar'].style.background = world.tension > 78 ? '#b94d2c' : '#777e5c';
-      fields.status.textContent = world.strandCount === 8
+      document.querySelector('#fold')!.classList.toggle('ready', world.canFold);
+      fields.status.textContent = world.folding
+        ? 'FOLDING THE DOUGH — STRANDS DOUBLING'
+        : world.strandCount === 8
         ? 'EIGHT STRANDS — KEEP PULLING'
         : world.tension > 78
           ? 'DOUGH UNDER TENSION — PULL SLOWLY'
