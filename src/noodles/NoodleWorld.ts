@@ -21,6 +21,8 @@ const INITIAL_LENGTH = 3.65;
 const MAX_STRANDS = 8;
 const tmp = new T.Vector3();
 const delta = new T.Vector3();
+const leftMotion = new T.Vector3(), rightMotion = new T.Vector3();
+const collisionVector = new T.Vector3(), contactNormal = new T.Vector3();
 
 export class NoodleWorld {
   readonly fixedDt = 1 / 120;
@@ -34,6 +36,18 @@ export class NoodleWorld {
   strands: NoodleStrand[] = [];
   steps = 0;
   private lastFoldTotalLength = INITIAL_LENGTH;
+  contacts = 0;
+  /** Flick the center of the dough; Verlet velocities carry the motion. */
+  snap() {
+    if (this.folding) return false;
+    const amplitude = .065 + this.settings.softness * .0004;
+    for (const [k, strand] of this.strands.entries()) for (let i = 1; i < SEGMENTS; i++) {
+      const envelope = Math.sin(Math.PI * i / SEGMENTS);
+      strand.previous[i].z -= amplitude * envelope * (1 + (k % 3) * .07);
+      strand.previous[i].y += .027 * envelope;
+    }
+    return true;
+  }
   private transition: {elapsed: number; duration: number; source: T.Vector3[][]; left: T.Vector3; right: T.Vector3} | null = null;
   get folding() { return this.transition !== null; }
   get foldProgress() { return this.transition ? Math.min(1, this.transition.elapsed / this.transition.duration) : 1; }
@@ -87,6 +101,7 @@ export class NoodleWorld {
     this.steps = 0;
     this.lastFoldTotalLength = INITIAL_LENGTH;
     this.transition = null;
+    this.contacts = 0;
     this.createStrands(1, INITIAL_LENGTH);
   }
 
@@ -171,11 +186,17 @@ export class NoodleWorld {
       if (this.transition.elapsed >= this.transition.duration) this.transition = null;
     }
     const blend = 1 - Math.exp(-dt * 24);
+    leftMotion.copy(this.left);
+    rightMotion.copy(this.right);
     this.left.lerp(this.leftTarget, blend);
     this.right.lerp(this.rightTarget, blend);
+    leftMotion.subVectors(this.left, leftMotion).clampLength(0, .09);
+    rightMotion.subVectors(this.right, rightMotion).clampLength(0, .09);
     const span = this.left.distanceTo(this.right);
     const gravity = 3 + this.settings.gravity * .085;
-    const damping = Math.exp(-dt * (2.1 + (100 - this.settings.softness) * .025));
+    // Less damping preserves hand-driven follow-through after a release.
+    const damping = Math.exp(-dt * (.62 + (100 - this.settings.softness) * .010));
+    this.contacts = 0;
     const compliance = (.0000008 + this.settings.softness * .00000014) / (dt * dt);
     for (const strand of this.strands) {
       const { points, previous, rest, lambdas } = strand;
@@ -193,6 +214,10 @@ export class NoodleWorld {
         old.copy(p);
         p.add(delta);
         p.y -= gravity * dt * dt;
+        const nearLeft = Math.max(0, 1 - i / 7);
+        const nearRight = Math.max(0, 1 - (SEGMENTS - i) / 7);
+        prev.addScaledVector(leftMotion, -nearLeft * .33);
+        prev.addScaledVector(rightMotion, -nearRight * .33);
       }
       lambdas.fill(0);
       for (let pass = 0; pass < SOLVER_PASSES; pass++) {
@@ -216,7 +241,10 @@ export class NoodleWorld {
         for (let i = 1; i < SEGMENTS; i++) {
           tmp.copy(points[i - 1]).add(points[i + 1]).multiplyScalar(.5);
           points[i].lerp(tmp, smooth);
-          if (points[i].y < .43) points[i].y = .43;
+          if (points[i].y < .32 + this.radius) {
+            points[i].y = .32 + this.radius;
+            previous[i].y = Math.min(previous[i].y, points[i].y);
+          }
         }
       }
       // Slow local creep spreads yield across nearby segments after a fast pull.
@@ -232,27 +260,43 @@ export class NoodleWorld {
       previous[0].copy(points[0]);
       previous[SEGMENTS].copy(points[SEGMENTS]);
     }
-    // Separated lanes keep doubled strands visually legible without pretending
-    // to be a full all-pairs contact solver. Their free middles fan apart,
-    // while the tips still converge under the two pinched fingertips.
-    if (this.strands.length > 1) {
-      const count = this.strands.length;
-      const gap = Math.max(.105, this.radius * 2.7);
-      for (let i = 2; i < SEGMENTS - 1; i++) {
-        const phase = Math.sin(Math.PI * i / SEGMENTS);
-        const envelope = Math.pow(Math.max(0, phase), .8);
-        let middleY = 0;
-        for (const strand of this.strands) middleY += strand.points[i].y;
-        middleY /= count;
-        for (let k = 0; k < count; k++) {
-          const p = this.strands[k].points[i];
-          const lane = (k - (count - 1) * .5) * gap * envelope;
-          p.y += (middleY + lane - p.y) * .19;
-          p.z += ((k - (count - 1) * .5) * .026 * envelope - p.z * .025) * .03;
-          if (p.y < .44) p.y = .44;
-        }
-      }
-    }
+    this.solveStrandContacts();
     this.steps++;
   }
+
+  /** Bounded particle-level collision approximation. Adjacent particles on
+   * the same strand stay connected; nonlocal contacts and folds can slide. */
+  private solveStrandContacts() {
+    const gap = Math.max(.055, this.radius * 1.95);
+    const gapSq = gap * gap;
+    const repel = (a: T.Vector3, b: T.Vector3, pa: T.Vector3, pb: T.Vector3, seed: number) => {
+      collisionVector.subVectors(b, a);
+      const sq = collisionVector.lengthSq();
+      if (sq >= gapSq) return;
+      let d = Math.sqrt(sq);
+      if (d < 1e-7) {
+        collisionVector.set(Math.sin(seed * 17) * .4, 1, .23).normalize();
+        d = 0;
+      } else collisionVector.multiplyScalar(1 / d);
+      const m = Math.min(.045, (gap - d) * .42);
+      contactNormal.copy(collisionVector).multiplyScalar(m);
+      a.addScaledVector(contactNormal, -.5); b.addScaledVector(contactNormal, .5);
+      pa.addScaledVector(contactNormal, -.45); pb.addScaledVector(contactNormal, .45);
+      this.contacts++;
+    };
+    for (let k = 0; k < this.strands.length; k++) {
+      const a = this.strands[k];
+      for (let j = k + 1; j < this.strands.length; j++) {
+        const b = this.strands[j];
+        for (let i = 2; i < SEGMENTS - 1; i++)
+          for (let n = Math.max(2, i - 1); n <= Math.min(SEGMENTS - 2, i + 1); n++)
+            repel(a.points[i], b.points[n], a.previous[i], b.previous[n], 1 + k * 23 + j);
+      }
+      // Ignore neighboring indices: they are intended to touch.
+      for (let i = 2; i < SEGMENTS - 5; i++)
+        for (let j = i + 5; j < SEGMENTS - 1; j++)
+          repel(a.points[i], a.points[j], a.previous[i], a.previous[j], 101 + i + j);
+    }
+  }
+
 }
