@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import type { NoodleWorld } from './NoodleWorld';
+import { NoodleLoops } from './NoodleLoops';
 
 const RADIAL = 16;
 const SEGMENTS = 32;
@@ -116,6 +117,7 @@ function createTubeGeometry() {
  * Grab proxies are transparent and do not appear as physical handles. */
 export class NoodleRenderer {
   private meshes: T.Mesh[] = [];
+  private loops: NoodleLoops;
   private doughTexture = createDoughTexture();
   private dough = new T.MeshPhysicalMaterial({
     color: '#f6d7a3', map: this.doughTexture, roughness: .89, metalness: 0,
@@ -125,6 +127,7 @@ export class NoodleRenderer {
   readonly grips: { left: T.Mesh; right: T.Mesh };
   private flourTexture = createFlourTexture();
   constructor(private scene: T.Scene) {
+    this.loops = new NoodleLoops(scene, this.dough);
     const surface = new T.Mesh(
       new RoundedBoxGeometry(9.4, .27, 5.9, 5, .12),
       new T.MeshStandardMaterial({ map: createWorkbenchTexture(), color: '#a49b8c', roughness: .94 })
@@ -182,6 +185,7 @@ export class NoodleRenderer {
     this.grips.left.position.copy(oldPoint);
     world.getRenderHandle('right', oldPoint);
     this.grips.right.position.copy(oldPoint);
+    this.loops.update(world);
     for (let strandIndex = 0; strandIndex < world.strands.length; strandIndex++) {
       const geometry = this.meshes[strandIndex].geometry;
       const positions = (geometry.getAttribute('position') as T.BufferAttribute).array as Float32Array;
