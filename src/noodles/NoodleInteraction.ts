@@ -18,12 +18,12 @@ export class NoodleInteraction {
   private lastX = 0;
   private lastY = 0;
   private orbitYaw = .04;
-  private orbitPitch = 1.26;
-  private distance = 11.4;
+  private orbitPitch = 1.19;
+  private distance = 8.25;
   private desiredYaw = this.orbitYaw;
   private desiredPitch = this.orbitPitch;
   private desiredDistance = this.distance;
-  private target = new T.Vector3(0, 2.18, 0);
+  private target = new T.Vector3(0, 1.24, 0);
   private dragOffset = new T.Vector3();
   private keyboard = false;
 
@@ -127,8 +127,8 @@ export class NoodleInteraction {
 
   resetView() {
     this.desiredYaw = .04;
-    this.desiredPitch = 1.26;
-    this.desiredDistance = 11.4;
+    this.desiredPitch = 1.19;
+    this.desiredDistance = 8.25;
   }
 
   private key = (e: KeyboardEvent) => {
@@ -160,7 +160,7 @@ export class NoodleInteraction {
     this.distance = T.MathUtils.lerp(this.distance, this.desiredDistance, blend);
     const span = this.world.left.distanceTo(this.world.right);
     const follow = .5 * (this.world.left.y + this.world.right.y);
-    this.target.y = T.MathUtils.lerp(this.target.y, T.MathUtils.clamp(follow - .45, 1.6, 2.8), blend * .25);
+    this.target.y = T.MathUtils.lerp(this.target.y, T.MathUtils.clamp(follow - .34, 1.13, 2.4), blend * .25);
     const framing = Math.max(0, (span - 5.2) * .48);
     offset.setFromSphericalCoords(this.distance + framing, this.orbitPitch, this.orbitYaw);
     this.camera.position.copy(this.target).add(offset);
