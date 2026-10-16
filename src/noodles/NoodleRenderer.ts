@@ -194,7 +194,7 @@ export class NoodleRenderer {
         const p = world.getRenderPoint(strandIndex, i, oldPoint);
         const t = i / SEGMENTS;
         const tip = (1 - smoothstep(0, .16, t)) + smoothstep(.84, 1, t);
-        const grip = Math.exp(-((Math.min(t, 1 - t) - .045) / .045) ** 2);
+        const grip = Math.exp(-Math.pow((Math.min(t, 1 - t) - .045) / .045, 2));
         // Pinched, slightly flattened ends are part of the same mesh, not balls attached to it.
         const radius = world.radius * (1 + .32 * tip + .2 * grip);
         const flatten = .68 + .32 * smoothstep(0, .19, Math.min(t, 1 - t));
