@@ -1,3 +1,4 @@
+import {createBasilGeometry} from './basil';
 import * as T from 'three';
 import {updateNormals} from '../performance/geometry';
 import {quality} from '../performance/quality';
@@ -168,15 +169,13 @@ export class PizzaSlice {
  }
  private leaves(){
   if(![0,2,4].includes(this.id))return;
-  const seed=this.id*17+2,r=.16+rand(seed)*.13,a=this.theta+(rand(seed+1)-.5)*.48,positions:number[]=[],indices:number[]=[],uv:number[]=[],colors:number[]=[];
-  for(let j=0;j<=16;j++)for(let side=0;side<5;side++){
-   const t=j/16,cross=(side-2)/2,x=cross*Math.sin(t*Math.PI)*(.14+.015*Math.sin(t*5)),z=t*.53-.265;
-   const ridge=(1-Math.abs(cross))*.028*Math.sin(t*Math.PI),y=.027*Math.sin(t*Math.PI)+ridge+.014*Math.sin(t*6+cross);
-   positions.push(x,y,z);uv.push(side/4,t);const c=.66+rand(j*3+side+seed)*.20;colors.push(c,.85+rand(j+seed)*.13,c*.64);
-   if(j<16&&side<4){const n=j*5+side;indices.push(n,n+5,n+1,n+1,n+5,n+6);}
-  }
-  const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(positions,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setAttribute('color',new T.Float32BufferAttribute(colors,3));g.setAttribute('sssThickness',new T.BufferAttribute(new Float32Array(positions.length/3).fill(.12),1));g.setIndex(indices);g.computeVertexNormals();
-  const leaf=new T.Mesh(g,this.materials.basil);leaf.name='Basil';const x=Math.cos(a)*r,z=Math.sin(a)*r;leaf.position.set(x-this.home.x,(cheeseField(x,z)>=CHEESE_EDGE?cheeseHeight(x,z):SAUCE_TOP+shoulderHeight(x,z))+.008,z-this.home.z);leaf.rotation.y=rand(seed+2)*6;leaf.rotation.z=(rand(seed+3)-.5)*.35;leaf.rotation.x=(rand(seed+4)-.5)*.3;leaf.scale.set(.85+rand(seed+5)*.3,1,.85+rand(seed+6)*.3);this.group.add(leaf);this.toppings.push({mesh:leaf,base:leaf.position.clone(),rotation:leaf.quaternion.clone(),binding:this.cloth.bind(leaf.position.x,leaf.position.z)});
+  const seed=this.id*17+2,r=.28+rand(seed)*.035,a=this.theta+(rand(seed+1)-.5)*.14;
+  const leaf=new T.Mesh(createBasilGeometry(seed),this.materials.basil);leaf.name='Basil';
+  const x=Math.cos(a)*r,z=Math.sin(a)*r;
+  leaf.position.set(x-this.home.x,(cheeseField(x,z)>=CHEESE_EDGE?cheeseHeight(x,z):SAUCE_TOP+shoulderHeight(x,z))+.016,z-this.home.z);
+  leaf.rotation.set((rand(seed+4)-.5)*.08,Math.PI/2-a,(rand(seed+3)-.5)*.08);
+  const scale=this.id===4?.76:1;leaf.scale.setScalar(scale);
+  this.group.add(leaf);this.toppings.push({mesh:leaf,base:leaf.position.clone(),rotation:leaf.quaternion.clone(),binding:this.cloth.bind(leaf.position.x,leaf.position.z)});
  }
  deformation(x:number,z:number){sample.set(x,DOUGH_NEUTRAL,z);return this.cloth.deform(sample,deformed).y-DOUGH_NEUTRAL;}
  updateGeometry(onlyCheese=false,alpha=1){

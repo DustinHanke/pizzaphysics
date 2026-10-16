@@ -3,18 +3,18 @@ import {quality} from '../performance/quality';
 import type { Materials } from './materials';
 
 const profiles={
- cheese:{strength:3.0,tint:'#fff0d1',power:1.8},
+ cheese:{strength:.65,tint:'#fff0d1',power:1.8},
  // Stretched mozzarella uses the same scattering profile as the source pool.
- strand:{strength:3.0,tint:'#fff0d1',power:1.8},
- underside:{strength:3.1,tint:'#ffb96c',power:1.7},
- dough:{strength:5.2,tint:'#ffc77e',power:1.8},
- crust:{strength:4.5,tint:'#ffd08a',power:1.7},
- sauce:{strength:.3,tint:'#ed6f27',power:2.3},
- basil:{strength:1.2,tint:'#d5f39a',power:1.6},
- crumb:{strength:3.8,tint:'#ffcb81',power:1.8},
+ strand:{strength:.65,tint:'#fff0d1',power:1.8},
+ underside:{strength:.32,tint:'#ffb96c',power:1.7},
+ dough:{strength:.45,tint:'#ffc77e',power:1.8},
+ crust:{strength:.28,tint:'#ffd08a',power:1.7},
+ sauce:{strength:.12,tint:'#ed6f27',power:2.3},
+ basil:{strength:.45,tint:'#d5f39a',power:1.6},
+ crumb:{strength:.48,tint:'#ffcb81',power:1.8},
 };
 
-/** Stronger single-scattering translucency approximation, kept albedo- and thickness-aware. */
+/** Restrained single-scattering translucency approximation, kept albedo- and thickness-aware. */
 export async function applyScattering(materials:Materials,nodeRenderer:boolean){
  // Phone shaders keep albedo, roughness, normal and SSS, but avoid a second
  // derivative bump evaluation and barely-visible layered specular lobes.
@@ -43,11 +43,11 @@ export async function applyScattering(materials:Materials,nodeRenderer:boolean){
    // Albedo modulation keeps scorched crust dark; thinner cheese scatters more.
    const albedo=base.map?texture(base.map).rgb.mul(color(base.color)):color(base.color);
    material.thicknessColorNode=color(profile.tint).mul(albedo).mul(penetration);
-   material.thicknessDistortionNode=float(.95);
-   material.thicknessAmbientNode=float(.14);
+   material.thicknessDistortionNode=float(.45);
+   material.thicknessAmbientNode=float(.025);
    const attenuation=uniform(profile.strength);material.thicknessAttenuationNode=attenuation;material.userData.scatterStrength=attenuation;
    material.thicknessPowerNode=float(profile.power);
-   material.thicknessScaleNode=float(7.2);
+   material.thicknessScaleNode=float(2.4);
    material.name=`${name} / subsurface`;
    // Both material families expose the physical properties consumed by the pizza.
    materials[name]=material as unknown as T.MeshPhysicalMaterial;
@@ -75,16 +75,16 @@ export async function applyScattering(materials:Materials,nodeRenderer:boolean){
      void RE_Direct_Pizza(const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in PhysicalMaterial material, inout ReflectedLight reflectedLight) {
       RE_Direct_Physical(directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight);
       vec3 scatteringHalf = normalize(directLight.direction + geometryNormal * 0.45);
-      float backlight = pow(saturate(dot(geometryViewDir, -scatteringHalf)), pizzaScatterPower) * 6.8;
+      float backlight = pow(saturate(dot(geometryViewDir, -scatteringHalf)), pizzaScatterPower) * 2.4;
       float minThickness = ${name==='cheese'||name==='strand'?'.02':'.08'};
-      float penetration = 1.0 - clamp(vPizzaThickness, minThickness, 1.0) * 0.64;
-      reflectedLight.directDiffuse += (backlight + 0.14) * pizzaScatterColor * material.diffuseColor * penetration * pizzaScatterStrength * directLight.color;
+      float penetration = 1.0 - clamp(vPizzaThickness, minThickness, 1.0) * 0.72;
+      reflectedLight.directDiffuse += (backlight + 0.025) * pizzaScatterColor * material.diffuseColor * penetration * pizzaScatterStrength * directLight.color;
      }
      #undef RE_Direct
      #define RE_Direct RE_Direct_Pizza
     `);
    };
-   material.customProgramCacheKey=()=>`pizza-subsurface-layered-normal-v4`;
+   material.customProgramCacheKey=()=>`pizza-subsurface-layered-normal-v5`;
    material.needsUpdate=true;
   }
  }

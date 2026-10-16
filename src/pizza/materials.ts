@@ -1,3 +1,5 @@
+import {createBasilMaterial} from './basil';
+import {noiseBump,normalFromHeight,CHEESE_NORMAL_STRENGTH} from './textureDetail';
 import * as T from 'three';
 import {rand,noise,loopNoise} from '../utils/noise';
 const toppingDetailUrl=new URL('../assets/topping-skin-detail.png',import.meta.url).href;
@@ -22,7 +24,7 @@ async function loadGeneratedTiles(){
 }
 function generatedPixel(kind:'crust'|'tomato'|'mozzarella',u:number,v:number){const tile=generatedTiles[kind],x=Math.floor(((u%1+1)%1)*tile.width),y=Math.floor(((v%1+1)%1)*tile.height),i=(y*tile.width+x)*4;return[tile.pixels[i],tile.pixels[i+1],tile.pixels[i+2]] as const;}
 function generatedGray(pixels:Uint8ClampedArray,width:number,height:number,u:number,v:number){const x=Math.floor(((u%1+1)%1)*width),y=Math.floor(((v%1+1)%1)*height),i=(y*width+x)*4;return(pixels[i]*.2126+pixels[i+1]*.7152+pixels[i+2]*.0722)/255;}
-function generatedRelief(kind:'crust'|'tomato'|'mozzarella',u:number,v:number){const tile=generatedTiles[kind],stepU=2/tile.width,stepV=2/tile.height,pixels=kind==='crust'?tile.pixels:tile.heightPixels,lum=(a:number,b:number)=>generatedGray(pixels,tile.width,tile.height,a,b);return(lum(u+stepU,v)+lum(u-stepU,v)+lum(u,v+stepV)+lum(u,v-stepV))*.25-lum(u,v);}
+function generatedRelief(kind:'crust'|'tomato'|'mozzarella',u:number,v:number){const tile=generatedTiles[kind],stepU=2/tile.width,stepV=2/tile.height,pixels=kind==='crust'?tile.pixels:tile.heightPixels,lum=(a:number,b:number)=>generatedGray(pixels,tile.width,tile.height,a,b);return kind==='crust'?(lum(u+stepU,v)+lum(u-stepU,v)+lum(u,v+stepV)+lum(u,v-stepV))*.25-lum(u,v):lum(u,v)-.5;}
 function generatedRoughness(kind:'crust'|'tomato'|'mozzarella',u:number,v:number){const tile=generatedTiles[kind];return generatedGray(tile.roughPixels,tile.width,tile.height,u,v);}
 async function loadToppingDetail(){
  const image=new Image();image.src=toppingDetailUrl;await image.decode();
@@ -110,8 +112,8 @@ async function crustTextures(){
    const texU=u*3.4+Math.sin(v*5)*.035,texV=v*.82,generated=generatedPixel('crust',texU,texV);
    // Match the v36–38 crust: strong photographic albedo carries the oven
    // blistering, while the stable procedural bake field adds restrained variety.
-   image.data[i+k]=T.MathUtils.lerp(procedural,generated[k],.98);
-   hi.data[i+k]=137+blister*9+baked*6+(fine-.5)*5+(micro-.5)*3-pore*6-crease*.7+generatedRelief('crust',texU,texV)*22;
+   image.data[i+k]=T.MathUtils.lerp(procedural,generated[k],.94);
+   hi.data[i+k]=137+blister*16+baked*10+(fine-.5)*5+(micro-.5)*3-pore*6-crease*.7+generatedRelief('crust',texU,texV)*48;
    // Toasted skin is a little smoother; flour and char both remain mostly matte.
    const dryFlour=flourMask*.48;
    ri.data[i+k]=T.MathUtils.clamp(240-caramel*21-blister*12+dryFlour*34+carbon*18+(medium-.5)*10,194,255);
@@ -137,13 +139,13 @@ function surfaceTextures(kind:'cheese'|'sauce'){
    const toast=T.MathUtils.smoothstep(detail[j+6]/255*.67+meso*.33,.72,.91);
    // Opaque creamy centers, a thin warm melt at their perimeter. The stain is
    // keyed to real pool thickness; it is never a white overlay on the tomato.
-   const melt=edge*(.34+broad*.18),cream=[229-broad*8,220-broad*9,198-broad*10];
-   const photoU=u*1.8+Math.sin(v*8)*.035+.23,photoV=v*1.8+.41,photo=generatedPixel('mozzarella',photoU,photoV),base=cream.map((value,k)=>T.MathUtils.lerp(T.MathUtils.lerp(value,[232,204,149][k],melt),[180,126,64][k],toast*.42)+skin*14);
-   for(let k=0;k<3;k++){const pooled=T.MathUtils.lerp(base[k],T.MathUtils.clamp(photo[k],[184,165,138][k],[246,239,222][k]),.96);data.data[i+k]=T.MathUtils.lerp(pooled,[204,158,57][k],oilDrizzle*.38);}
-   bump=128+((fine-.5)*5+(meso-.5)*9+(grain-.5)*2+skin*54+generatedRelief('mozzarella',photoU,photoV)*170)*(.40+.60*(1-edge))+toast*5*(1-edge);
+   const melt=edge*(.34+broad*.18),cream=[240-broad*9,231-broad*11,208-broad*12];
+   const photoU=u*1.8+Math.sin(v*8)*.035+.23,photoV=v*1.8+.41,photo=generatedPixel('mozzarella',photoU,photoV),base=cream.map((value,k)=>T.MathUtils.lerp(T.MathUtils.lerp(value,[235,184,95][k],melt),[180,126,64][k],toast*.7)+skin*14);
+   for(let k=0;k<3;k++){const pooled=T.MathUtils.lerp(base[k],T.MathUtils.clamp(photo[k],[184,165,138][k],[248,244,229][k]),.42);data.data[i+k]=T.MathUtils.lerp(pooled,[204,158,57][k],oilDrizzle*.38);}
+   bump=128+((fine-.5)*5+(meso-.5)*9+(grain-.5)*2+skin*54+generatedRelief('mozzarella',photoU,photoV)*100)*(.40+.60*(1-edge))+toast*5*(1-edge);
    // Patchy whey/oil sheen, with rounded cheese remaining softer and less wet
-   // than tomato. Effective roughness is .28–.49, independent of the color map.
-   const cheeseRoughness=T.MathUtils.clamp(T.MathUtils.lerp(generatedRoughness('mozzarella',photoU,photoV),.46+broad*.045+(fine-.5)*.025-oil*.08-edge*.018-oilDrizzle*.11,.38),.31,.61);
+   // than tomato. Effective roughness is .26–.48, independent of the color map.
+   const cheeseRoughness=T.MathUtils.clamp(T.MathUtils.lerp(generatedRoughness('mozzarella',photoU,photoV),.35+broad*.075+(fine-.5)*.04-oil*.08-edge*.025-oilDrizzle*.10,.65),.26,.48);
    rv=255*cheeseRoughness/.70;
   }else{
    const pulp=T.MathUtils.smoothstep(meso*.66+fine*.34,.32,.70);
@@ -152,13 +154,13 @@ function surfaceTextures(kind:'cheese'|'sauce'){
    // Warm San Marzano reds. Pulp, oil and watery highlights cannot desaturate
    // this albedo: photographed white highlights contribute to relief only.
    const tomato=T.MathUtils.smoothstep(broad,.18,.83),concentration=pulp*.13+fleck*.055;
-   const photoU=u*2.6+Math.sin(v*6)*.04+.37,photoV=v*2.6+.19,photo=generatedPixel('tomato',photoU,photoV),base=[0,1,2].map(k=>T.MathUtils.lerp(T.MathUtils.lerp([143,25,9][k],[199,44,13][k],tomato),[127,22,8][k],concentration)+water*[9,6,1][k]+skin*[18,4,1][k]);
-   const cooked=[T.MathUtils.clamp(photo[0],94,216),T.MathUtils.clamp(photo[1],13,72),T.MathUtils.clamp(photo[2],4,43)];
-   for(let k=0;k<3;k++){const pulpColor=T.MathUtils.lerp(base[k],cooked[k],.78);data.data[i+k]=T.MathUtils.lerp(pulpColor,[207,155,46][k],oilDrizzle*.44);}
-   bump=128+(pulp-.5)*20+(fine-.5)*10*(1-water*.70)+(grain-.5)*3+skin*42*(1-water*.28)+generatedRelief('tomato',photoU,photoV)*82-water*5+fleck*5;
+   const photoU=u*2.6+Math.sin(v*6)*.04+.37,photoV=v*2.6+.19,photo=generatedPixel('tomato',photoU,photoV),base=[0,1,2].map(k=>T.MathUtils.lerp(T.MathUtils.lerp([168,32,9][k],[228,68,18][k],tomato),[127,22,8][k],concentration)+water*[9,6,1][k]+skin*[18,4,1][k]);
+   const cooked=[T.MathUtils.clamp(photo[0],110,231),T.MathUtils.clamp(photo[1],20,82),T.MathUtils.clamp(photo[2],4,43)];
+   for(let k=0;k<3;k++){const pulpColor=T.MathUtils.lerp(base[k],cooked[k],.60);data.data[i+k]=T.MathUtils.lerp(pulpColor,[207,155,46][k],oilDrizzle*.44);}
+   bump=128+(pulp-.5)*20+(fine-.5)*10*(1-water*.70)+(grain-.5)*3+skin*42*(1-water*.28)+generatedRelief('tomato',photoU,photoV)*85-water*5+fleck*5;
    // Keep the generated tomato map in relief; its pale wet pixels were tinting
    // the red albedo pink. Moisture is now carried by restrained roughness.
-   const wetRoughness=T.MathUtils.clamp(T.MathUtils.lerp(generatedRoughness('tomato',photoU,photoV),.39+pulp*.12-water*.065-oil*.014-oilDrizzle*.13,.44),.24,.52);
+   const wetRoughness=T.MathUtils.clamp(T.MathUtils.lerp(generatedRoughness('tomato',photoU,photoV),.35+pulp*.13-water*.055-oil*.035-oilDrizzle*.12,.65),.28,.48);
    rv=255*wetRoughness/.50;
   }
   data.data[i+3]=255;
@@ -166,39 +168,6 @@ function surfaceTextures(kind:'cheese'|'sauce'){
  }
  ctx.putImageData(data,0,0);bc.putImageData(height,0,0);rc.putImageData(rough,0,0);return{map:tex(c),bump:tex(b,false),roughness:tex(r,false)};
 }
-
-/** Tileable multi-octave height noise. Kept in linear data space, independent of color. */
-function noiseBump(kind:'dough'|'strand'){
- const size=256,c=canvas(size,size),ctx=c.getContext('2d')!,data=ctx.createImageData(size,size);
- const hash=(x:number,y:number,n:number)=>rand(((x%n+n)%n)+((y%n+n)%n)*157);
- const tile=(x:number,y:number,n:number)=>{const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy,u=fx*fx*(3-2*fx),v=fy*fy*(3-2*fy);return T.MathUtils.lerp(T.MathUtils.lerp(hash(ix,iy,n),hash(ix+1,iy,n),u),T.MathUtils.lerp(hash(ix,iy+1,n),hash(ix+1,iy+1,n),u),v);};
- for(let y=0;y<size;y++)for(let x=0;x<size;x++){
-  const u=x/size,v=y/size,medium=tile(u*16,v*16,16),fine=tile(u*48,v*48,48),micro=tile(u*96,v*96,96);
-  const pore=kind==='dough'?Math.pow(Math.max(0,(fine-.59)*2.44),2)*54:0;
-  const h=128+(medium-.5)*30+(fine-.5)*20+(micro-.5)*8-pore,i=(y*size+x)*4;
-  data.data[i]=data.data[i+1]=data.data[i+2]=h;data.data[i+3]=255;
- }
- ctx.putImageData(data,0,0);const t=tex(c,false);t.wrapS=t.wrapT=T.RepeatWrapping;if(kind==='dough')t.repeat.set(5,5);return t;
-}
-
-
-/** Convert the broader height gradients into a tangent-space normal map.
- * Fine height bump remains a separate shader layer, so the two add detail at different scales.
- */
-function normalFromHeight(height:T.CanvasTexture,strength:number,repeatMultiplier=4){
- const source=height.image as HTMLCanvasElement,w=source.width,h=source.height;
- const pixels=source.getContext('2d')!.getImageData(0,0,w,h).data;
- const c=canvas(w,h),ctx=c.getContext('2d')!,data=ctx.createImageData(w,h);
- const sample=(x:number,y:number)=>{x=height.wrapS===T.RepeatWrapping?(x%w+w)%w:Math.max(0,Math.min(w-1,x));y=height.wrapT===T.RepeatWrapping?(y%h+h)%h:Math.max(0,Math.min(h-1,y));return pixels[(y*w+x)*4]/255;};
- for(let y=0;y<h;y++)for(let x=0;x<w;x++){
-  const dx=(sample(x+2,y)-sample(x-2,y))*.65+(sample(x+5,y)-sample(x-5,y))*.35;
-  const dy=(sample(x,y+2)-sample(x,y-2))*.65+(sample(x,y+5)-sample(x,y-5))*.35;
-  const nx=-dx*strength,ny=dy*strength,length=Math.hypot(nx,ny,1),i=(y*w+x)*4;
-  data.data[i]=(nx/length*.5+.5)*255;data.data[i+1]=(ny/length*.5+.5)*255;data.data[i+2]=(1/length*.5+.5)*255;data.data[i+3]=255;
- }
- ctx.putImageData(data,0,0);const map=tex(c,false);map.wrapS=map.wrapT=T.RepeatWrapping;map.repeat.copy(height.repeat).multiplyScalar(repeatMultiplier);return map;
-}
-
 
 /** Four non-repeating cut-crumb maps: large alveoli, medium cells, fine pores.
  * Large cavities also drive cut-face recesses; small pores remain in bump. */
@@ -266,21 +235,12 @@ function undersideTextures(){
  return result;
 }
 
-function basilTextures(){
- const size=256,c=canvas(size,size),b=canvas(size,size),ctx=c.getContext('2d')!,bc=b.getContext('2d')!,data=ctx.createImageData(size,size),height=bc.createImageData(size,size);
- for(let y=0;y<size;y++)for(let x=0;x<size;x++){
-  const u=x/size,v=y/size,d=Math.abs(u-.5),center=Math.exp(-d*d*1600),branch=Math.exp(-Math.pow(Math.sin((v+d*.6)*Math.PI*9),2)*180)*(1-d*1.8),n=noise(u*55,v*85),vein=Math.max(center,branch*.55),i=(y*size+x)*4;
-  data.data[i]=61+vein*15+n*12;data.data[i+1]=104+vein*19+n*15;data.data[i+2]=31+vein*10+n*8;data.data[i+3]=255;
-  for(let k=0;k<3;k++)height.data[i+k]=125+vein*35+(n-.5)*8;height.data[i+3]=255;
- }
- ctx.putImageData(data,0,0);bc.putImageData(height,0,0);return{map:tex(c),bump:tex(b,false)};
-}
 export async function createMaterials(){
  await Promise.all([loadGeneratedTiles(),loadToppingDetail()]);
  const crust=await crustTextures();
- const cheese=surfaceTextures('cheese'),sauce=surfaceTextures('sauce'),doughBump=noiseBump('dough'),crumb=crumbTextures(),underside=undersideTextures(),basil=basilTextures();
+ const cheese=surfaceTextures('cheese'),sauce=surfaceTextures('sauce'),doughBump=noiseBump('dough'),crumb=crumbTextures(),underside=undersideTextures();
  const baseNormal=normalFromHeight(doughBump,4.5);baseNormal.channel=1;
- const cheeseMaterial=new T.MeshPhysicalMaterial({map:cheese.map,metalness:0,ior:1.38,specularIntensity:.52,roughness:.70,roughnessMap:cheese.roughness,bumpMap:cheese.bump,bumpScale:.034,normalMap:normalFromHeight(cheese.bump,4.0,1),normalScale:new T.Vector2(.34,.34),clearcoat:.025,clearcoatRoughness:.48,sheen:.055,sheenColor:new T.Color('#f2dfbf'),sheenRoughness:.88,side:T.DoubleSide});
+ const cheeseMaterial=new T.MeshPhysicalMaterial({map:cheese.map,metalness:0,ior:1.42,specularIntensity:.85,roughness:.70,roughnessMap:cheese.roughness,bumpMap:cheese.bump,bumpScale:.034,normalMap:normalFromHeight(cheese.bump,CHEESE_NORMAL_STRENGTH,1),normalScale:new T.Vector2(.8,.8),clearcoat:.18,clearcoatRoughness:.28,sheen:0,sheenColor:new T.Color('#f2dfbf'),sheenRoughness:.88,side:T.DoubleSide});
  // A cloned surface material keeps the exact same photo maps and map transforms.
  // Only the vertex thickness attribute changes optically as the cheese stretches.
  const strandMaterial=cheeseMaterial.clone();
@@ -289,10 +249,10 @@ export async function createMaterials(){
  crumb:new T.MeshPhysicalMaterial({map:crumb.map,bumpMap:crumb.bump,bumpScale:.017,roughness:.96,side:T.DoubleSide}),
  cheese:cheeseMaterial,
  dough:new T.MeshPhysicalMaterial({color:'#e2c79f',roughness:.93,bumpMap:doughBump,bumpScale:.045,normalMap:normalFromHeight(doughBump,7),normalScale:new T.Vector2(.40,.40)}),
- sauce:new T.MeshPhysicalMaterial({map:sauce.map,metalness:0,ior:1.36,specularIntensity:.38,roughness:.50,roughnessMap:sauce.roughness,bumpMap:sauce.bump,bumpScale:.018,normalMap:normalFromHeight(sauce.bump,2.6,1),normalScale:new T.Vector2(.24,.24),clearcoat:0,clearcoatRoughness:.42}),
- crust:new T.MeshPhysicalMaterial({map:crust.map,metalness:0,ior:1.45,specularIntensity:.65,roughness:.98,roughnessMap:crust.roughness,bumpMap:crust.bump,bumpScale:.025,normalMap:normalFromHeight(crust.bump,2.6,1),normalScale:new T.Vector2(.19,.19)}),
+ sauce:new T.MeshPhysicalMaterial({map:sauce.map,metalness:0,ior:1.36,specularIntensity:.75,roughness:.50,roughnessMap:sauce.roughness,bumpMap:sauce.bump,bumpScale:.018,normalMap:normalFromHeight(sauce.bump,3.6,1),normalScale:new T.Vector2(.42,.42),clearcoat:.12,clearcoatRoughness:.3}),
+ crust:new T.MeshPhysicalMaterial({map:crust.map,metalness:0,ior:1.45,specularIntensity:.65,roughness:.98,roughnessMap:crust.roughness,bumpMap:crust.bump,bumpScale:.038,normalMap:normalFromHeight(crust.bump,3.4,1),normalScale:new T.Vector2(.38,.38)}),
  strand:strandMaterial,
- basil:new T.MeshPhysicalMaterial({map:basil.map,bumpMap:basil.bump,bumpScale:.008,roughness:.56,side:T.DoubleSide,vertexColors:true}),
+ basil:createBasilMaterial(),
  };
 }
 export type Materials=Awaited<ReturnType<typeof createMaterials>>;
@@ -303,6 +263,6 @@ export function refreshMozzarellaMaterial(material:T.MeshPhysicalMaterial){
  for(const [property,key] of [['map','map'],['bumpMap','bump'],['roughnessMap','roughness']] as const){const current=material[property];if(current){current.image=next[key].image;current.needsUpdate=true;}next[key].dispose();}
  // The normal is now pool-specific, so amount/seed updates must refresh it too.
  // Preserve its texture object for the already compiled WebGPU normal node.
- const nextNormal=normalFromHeight(material.bumpMap as T.CanvasTexture,2.4,1);
+ const nextNormal=normalFromHeight(material.bumpMap as T.CanvasTexture,CHEESE_NORMAL_STRENGTH,1);
  if(material.normalMap){material.normalMap.image=nextNormal.image;material.normalMap.needsUpdate=true;}nextNormal.dispose();
 }

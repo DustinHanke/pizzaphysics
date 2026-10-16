@@ -15,7 +15,7 @@ export async function createScene(canvas:HTMLCanvasElement){
  }
  if(!renderer)renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});
  const resolution=new ResolutionBudget(Math.min(devicePixelRatio,quality.mobile?1.5:1.75),Math.min(devicePixelRatio,quality.mobile?1.25:1));
- renderer.setPixelRatio(resolution.ratio);renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=.86;renderer.outputColorSpace=T.SRGBColorSpace;
+ renderer.setPixelRatio(resolution.ratio);renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=.98;renderer.outputColorSpace=T.SRGBColorSpace;
  const environment=new RoomEnvironment();
  try{
   const source=await new HDRLoader().loadAsync(studioEnvironmentUrl);source.mapping=T.EquirectangularReflectionMapping;
@@ -24,19 +24,19 @@ export async function createScene(canvas:HTMLCanvasElement){
   source.dispose();
   // Soft world-space studio reflections add dimensional fill while the separate
   // key and rim lights continue to define the food and cast contact shadows.
-  scene.environmentIntensity=.15;
+  scene.environmentIntensity=.22;
  }catch(error){console.warn('Image-based studio lighting unavailable; using generated room and direct lights.',error);
   try{if(renderer.isWebGPURenderer){const {PMREMGenerator}=await import('three/webgpu');const pmrem=new PMREMGenerator(renderer);scene.environment=(await pmrem.fromSceneAsync(environment,.055)).texture;pmrem.dispose();}
    else{const pmrem=new T.PMREMGenerator(renderer);scene.environment=pmrem.fromScene(environment,.055).texture;pmrem.dispose();}scene.environmentIntensity=.16;
   }catch(fallbackError){console.warn('Studio reflections unavailable; using direct studio lights.',fallbackError);}
  }finally{environment.dispose();}
- const hemi=new T.HemisphereLight('#fff0dc','#51443a',.09);scene.add(hemi);
- // Three-point food-photography rig: a lower side key defines the crust,
+ const hemi=new T.HemisphereLight('#fff4e3','#4a4440',.08);scene.add(hemi);
+ // Three-point food-photography rig: an elevated side key defines the crust,
  // a restrained opposite fill preserves shadow color, and a warm rear rim
  // picks up dough translucency and mozzarella edges without flattening the top.
- const key=new T.DirectionalLight('#fff0dc',1.75);key.position.set(-4.5,3.8,3.5);key.castShadow=true;key.shadow.autoUpdate=false;key.shadow.needsUpdate=true;key.shadow.mapSize.set(quality.mobile?1024:2048,quality.mobile?1024:2048);key.shadow.camera.left=-6;key.shadow.camera.right=6;key.shadow.camera.top=6;key.shadow.camera.bottom=-6;key.shadow.normalBias=.009;key.shadow.bias=-.0002;key.shadow.radius=6;scene.add(key);
- const fill=new T.DirectionalLight('#e7d9c6',.30);fill.position.set(5,2.6,1.5);scene.add(fill);
- const rim=new T.DirectionalLight('#ffc477',1.05);rim.position.set(-3.5,2.0,-5);scene.add(rim);
+ const key=new T.DirectionalLight('#fff5e7',2.6);key.position.set(-5,6,-3);key.castShadow=true;key.shadow.autoUpdate=false;key.shadow.needsUpdate=true;key.shadow.mapSize.set(quality.mobile?1024:2048,quality.mobile?1024:2048);key.shadow.camera.left=-6;key.shadow.camera.right=6;key.shadow.camera.top=6;key.shadow.camera.bottom=-6;key.shadow.normalBias=.009;key.shadow.bias=-.0002;key.shadow.radius=3;scene.add(key);
+ const fill=new T.DirectionalLight('#e8efff',.18);fill.position.set(5,2.6,1.5);scene.add(fill);
+ const rim=new T.DirectionalLight('#ffe0b3',.45);rim.position.set(-2,4,-5);scene.add(rim);
  const floor=new T.Mesh(new T.PlaneGeometry(150,150),new T.MeshStandardMaterial({color:'#25211d',roughness:1}));floor.rotation.x=-Math.PI/2;floor.position.y=.001;floor.receiveShadow=true;scene.add(floor);
  // A soft contact occlusion field grounds the thin dough without hard outlines.
  const textureCanvas=document.createElement('canvas');textureCanvas.width=textureCanvas.height=128;const ctx=textureCanvas.getContext('2d')!;const grad=ctx.createRadialGradient(64,64,20,64,64,64);grad.addColorStop(0,'rgba(55,43,23,.21)');grad.addColorStop(.70,'rgba(55,43,23,.13)');grad.addColorStop(1,'rgba(55,43,23,0)');ctx.fillStyle=grad;ctx.fillRect(0,0,128,128);
