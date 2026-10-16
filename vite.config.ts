@@ -1,13 +1,11 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'node:path';
 
+// Standalone GPT Sites preview: only the noodle experience is mounted at /.
 export default defineConfig({
   build: {
     rollupOptions: {
-      input: {
-        pizza: resolve(import.meta.dirname, 'index.html'),
-        noodles: resolve(import.meta.dirname, 'noodles.html'),
-      },
+      input: resolve(import.meta.dirname, 'index.html'),
     },
   },
 });
