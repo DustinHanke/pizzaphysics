@@ -38,11 +38,13 @@ async function start() {
   };
 
   document.querySelector('#reset')!.addEventListener('click', reset);
+  document.querySelector('#snap')!.addEventListener('click', () => world.snap());
   document.querySelector('#fold')!.addEventListener('click', fold);
   document.querySelector('#camera-reset')!.addEventListener('click', () => controller.resetView());
   document.addEventListener('keydown', e => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLButtonElement || e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.code === 'KeyR') reset();
+    if (e.code === 'KeyS') world.snap();
     if (e.code === 'KeyF') fold();
     if (e.code === 'KeyC') controller.resetView();
   });
