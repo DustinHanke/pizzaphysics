@@ -2,6 +2,7 @@ import '../style.css';
 import './noodles.css';
 import * as T from 'three';
 import { createScene } from '../scene/createScene';
+import { quality } from '../performance/quality';
 import { NoodleWorld } from './NoodleWorld';
 import { NoodleRenderer } from './NoodleRenderer';
 import { NoodleInteraction } from './NoodleInteraction';
@@ -45,7 +46,7 @@ async function start() {
   });
 
   const fields = Object.fromEntries(['length', 'strands', 'thickness', 'stretch', 'tension', 'tension-bar', 'status', 'fps', 'physics'].map(id => [id, document.getElementById(id)!]));
-  let previous = performance.now(), lastUI = 0, frames = 0, elapsed = 0, smoothedPhysics = 0;
+  let previous = performance.now(), lastUI = 0, lastShadow = 0, frames = 0, elapsed = 0, smoothedPhysics = 0;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   noodles.update(world);
@@ -59,7 +60,10 @@ async function start() {
     smoothedPhysics = smoothedPhysics * .94 + world.timeMs * .06;
     controller.update(reducedMotion ? Math.max(dt, .1) : dt);
     noodles.update(world);
-    key.shadow.needsUpdate = true;
+    if (!quality.mobile || now - lastShadow >= 1000 / 30) {
+      key.shadow.needsUpdate = true;
+      lastShadow = now;
+    }
     renderer.render(scene, camera);
     frames++;
     elapsed += frameSeconds;
@@ -75,7 +79,7 @@ async function start() {
         ? 'EIGHT STRANDS — KEEP PULLING'
         : world.tension > 78
           ? 'DOUGH UNDER TENSION — PULL SLOWLY'
-          : world.drawRatio > 1.35
+          : world.canFold
             ? 'READY TO FOLD — DOUBLE YOUR STRANDS'
             : 'DOUGH READY TO PULL';
       fields.fps.textContent = String(Math.round(frames / Math.max(.001, elapsed)));
