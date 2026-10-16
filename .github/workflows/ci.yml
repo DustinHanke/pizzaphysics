@@ -15,3 +15,16 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+
+      # On the isolated VPS-review branch, publish the static output as a ready-to-upload archive.
+      - name: Package Noodle Physics for VPS
+        if: github.ref == 'refs/heads/preview/noodle-physics-sites'
+        run: cd dist && zip -q -r ../noodle-physics-vps.zip .
+      - name: Upload VPS deployment package
+        if: github.ref == 'refs/heads/preview/noodle-physics-sites'
+        uses: actions/upload-artifact@v4
+        with:
+          name: noodle-physics-vps
+          path: noodle-physics-vps.zip
+          retention-days: 30
+          if-no-files-found: error
