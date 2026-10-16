@@ -49,11 +49,11 @@ function createWorkbenchTexture() {
   const ctx = canvas.getContext('2d')!;
   ctx.fillStyle = '#837c71';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  for (let i = 0; i < 12000; i++) {
+  for (let i = 0; i < 4500; i++) {
     const x = grain(i * 5.97) * 512;
     const y = grain(i * 1.79 + 2.9) * 256;
     const s = grain(i * 0.84 + 4.14);
-    ctx.fillStyle = s > .5 ? `rgba(237,226,205,${.018 + s * .085})` : `rgba(49,43,38,${.012 + s * .085})`;
+    ctx.fillStyle = s > .5 ? `rgba(237,226,205,${.006 + s * .028})` : `rgba(49,43,38,${.006 + s * .027})`;
     ctx.fillRect(x, y, .35 + s * 2, .35 + s * 2);
   }
   const tex = new T.CanvasTexture(canvas);
@@ -203,8 +203,8 @@ export class NoodleRenderer {
         const distToTip = Math.min(t, 1 - t);
         // Sculpted tip profile: a rounded narrow end, shoulders of thicker dough,
         // then visibly uneven material across the rest of the strand.
-        const rolledEnd = .19 + .81 * smoothstep(0, .107, distToTip);
-        const shoulder = .42 * Math.exp(-Math.pow((distToTip - .11) / .075, 2));
+        const rolledEnd = .70 + .30 * smoothstep(0, .09, distToTip);
+        const shoulder = .21 * Math.exp(-Math.pow((distToTip - .11) / .075, 2));
         const slowWaves = .095 * Math.sin(t * 7.7 + strandIndex * .62)
           + .066 * Math.sin(t * 18.9 + 1.1 + strandIndex * .19)
           + .033 * Math.sin(t * 41.3 + 2.6);
@@ -244,12 +244,13 @@ export class NoodleRenderer {
       for (let end = 0; end < 2; end++) {
         const p = world.getRenderPoint(strandIndex, end ? SEGMENTS : 0, oldPoint);
         const o = ((SEGMENTS + 1) * RADIAL + end) * 3;
-        positions[o] = p.x;
-        positions[o + 1] = p.y;
-        positions[o + 2] = p.z;
         world.getRenderPoint(strandIndex, end ? SEGMENTS : 1, tangent);
         world.getRenderPoint(strandIndex, end ? SEGMENTS - 1 : 0, binormal);
         tangent.sub(binormal).normalize().multiplyScalar(end ? 1 : -1);
+        // The cap bows outward into a rounded dough tip, never a flat slice.
+        positions[o] = p.x + tangent.x * .065;
+        positions[o + 1] = p.y + tangent.y * .065;
+        positions[o + 2] = p.z + tangent.z * .065;
         normals[o] = tangent.x;
         normals[o + 1] = tangent.y;
         normals[o + 2] = tangent.z;
