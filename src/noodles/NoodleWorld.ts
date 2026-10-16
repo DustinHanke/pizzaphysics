@@ -34,6 +34,23 @@ export class NoodleWorld {
   strands: NoodleStrand[] = [];
   steps = 0;
   private lastFoldTotalLength = INITIAL_LENGTH;
+  private transition: {elapsed: number; duration: number; source: T.Vector3[][]; left: T.Vector3; right: T.Vector3} | null = null;
+  get folding() { return this.transition !== null; }
+  get foldProgress() { return this.transition ? Math.min(1, this.transition.elapsed / this.transition.duration) : 1; }
+  getRenderHandle(side: 'left' | 'right', out: T.Vector3) {
+    const handle = this[side];
+    if (!this.transition) return out.copy(handle);
+    const t = this.foldProgress;
+    const ease = t * t * (3 - 2 * t);
+    return out.copy(this.transition[side]).lerp(handle, ease);
+  }
+  getRenderPoint(strand: number, vertex: number, out: T.Vector3) {
+    const end = this.strands[strand].points[vertex];
+    if (!this.transition) return out.copy(end);
+    const t = this.foldProgress;
+    const ease = t * t * (3 - 2 * t);
+    return out.copy(this.transition.source[strand][vertex]).lerp(end, ease);
+  }
 
   constructor() { this.reset(); }
 
@@ -68,10 +85,12 @@ export class NoodleWorld {
     this.accumulator = 0;
     this.steps = 0;
     this.lastFoldTotalLength = INITIAL_LENGTH;
+    this.transition = null;
     this.createStrands(1, INITIAL_LENGTH);
   }
 
   moveHandle(side: 'left' | 'right', position: T.Vector3) {
+    if (this.folding) return;
     const target = side === 'left' ? this.leftTarget : this.rightTarget;
     target.copy(position);
     target.x = T.MathUtils.clamp(target.x, -4.5, 4.5);
@@ -107,6 +126,9 @@ export class NoodleWorld {
   fold() {
     if (!this.canFold) return false;
     const before = this.totalLength;
+    const source = this.strands.map(strand => strand.points.map(p => p.clone()));
+    const oldLeft = this.left.clone();
+    const oldRight = this.right.clone();
     const length = this.materialLength * .5;
     const halfSpan = Math.min(1.15, length * .35);
     const center = tmp.copy(this.left).add(this.right).multiplyScalar(.5);
@@ -116,6 +138,16 @@ export class NoodleWorld {
     this.leftTarget.copy(this.left);
     this.rightTarget.copy(this.right);
     this.createStrands(this.strandCount * 2, length);
+    // Each original strand bends back on itself: the two halves travel together
+    // into the doubled arrangement rather than teleporting into parallel tubes.
+    const halves = this.strands.map((_, strand) => {
+      const path = source[Math.floor(strand / 2)];
+      return Array.from({ length: SEGMENTS + 1 }, (_, i) => {
+        const k = Math.round(i * .5);
+        return path[strand % 2 === 0 ? k : SEGMENTS - k].clone();
+      });
+    });
+    this.transition = {elapsed: 0, duration: .82, source: halves, left: oldLeft, right: oldRight};
     this.lastFoldTotalLength = before;
     this.accumulator = 0;
     return true;
@@ -133,6 +165,10 @@ export class NoodleWorld {
   }
 
   step(dt: number) {
+    if (this.transition) {
+      this.transition.elapsed += dt;
+      if (this.transition.elapsed >= this.transition.duration) this.transition = null;
+    }
     const blend = 1 - Math.exp(-dt * 24);
     this.left.lerp(this.leftTarget, blend);
     this.right.lerp(this.rightTarget, blend);
@@ -179,7 +215,7 @@ export class NoodleWorld {
         for (let i = 1; i < SEGMENTS; i++) {
           tmp.copy(points[i - 1]).add(points[i + 1]).multiplyScalar(.5);
           points[i].lerp(tmp, smooth);
-          if (points[i].y < .24) points[i].y = .24;
+          if (points[i].y < .43) points[i].y = .43;
         }
       }
       // Slow local creep spreads yield across nearby segments after a fast pull.
@@ -194,6 +230,23 @@ export class NoodleWorld {
       points[SEGMENTS].copy(this.right);
       previous[0].copy(points[0]);
       previous[SEGMENTS].copy(points[SEGMENTS]);
+    }
+    // Soft lane constraints approximate strand-to-strand contact without an
+    // expensive all-pairs capsule solver. Adjacent strands separate only if
+    // their thickness requires it; nearby ends can remain joined by the pull.
+    for (let k = 1; k < this.strands.length; k++) {
+      const prev = this.strands[k - 1].points;
+      const next = this.strands[k].points;
+      const diameter = Math.max(.035, this.radius * 1.75);
+      for (let i = 3; i < SEGMENTS - 2; i++) {
+        delta.subVectors(next[i], prev[i]);
+        const d = delta.length();
+        if (d < diameter && d > 1e-7) {
+          delta.multiplyScalar((diameter - d) * .18 / d);
+          next[i].add(delta);
+          prev[i].sub(delta);
+        }
+      }
     }
     this.steps++;
   }
