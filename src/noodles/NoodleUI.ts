@@ -15,9 +15,10 @@ export function mountNoodleUI(settings: NoodleSettings) {
       <div class="pull-hint" id="hint"><span class="hint-mark" aria-hidden="true">↔</span><span>Pinch an end. Draw it out.</span></div>
     </section>
     <div class="stage-actions">
-      <span class="gesture-note">Pull the dough apart · Bring the ends together to fold · Scroll to zoom</span>
+      <span class="gesture-note">Pull to stretch · Snap to swing · Bring ends together to fold</span>
       <div class="view-actions">
         <button id="camera-reset" title="Reset camera (C)">Reset view</button>
+        <button id="snap" title="Snap the dough (S)">Swing <span aria-hidden="true">↝</span></button>
         <button id="fold" title="Fold and double the strands (F)">Fold &amp; double <span aria-hidden="true">↶</span></button>
         <button id="reset" title="Start with fresh dough (R)">Fresh start <span aria-hidden="true">↻</span></button>
       </div>
@@ -34,7 +35,7 @@ export function mountNoodleUI(settings: NoodleSettings) {
       <p id="status" role="status">DOUGH READY TO PULL</p>
     </section>
     <aside class="controls">
-      <div class="controls-intro"><span class="small-label">A STUDY IN HAND-PULLED DOUGH</span><h2>The perfect<br><em>pull.</em></h2><p>Pinch the dough at either end and draw it out. Watch the strand grow thinner under tension. When it's long enough, fold it back on itself and pull again.</p></div>
+      <div class="controls-intro"><span class="small-label">A STUDY IN HAND-PULLED DOUGH</span><h2>The perfect<br><em>pull.</em></h2><p>Pull the dough to thin it, then flick it to watch its weight and momentum. When it's long enough, fold it into connected strands and repeat.</p></div>
       <button class="controls-toggle" aria-expanded="true" aria-controls="control-body"><span>Adjust the feel</span><span class="toggle-symbol">−</span></button>
       <div id="control-body"></div>
       <p class="specimen-note">A little science. A lot of flour.<br><span>01 Pull · 02 Fold · 03 Repeat</span></p>
