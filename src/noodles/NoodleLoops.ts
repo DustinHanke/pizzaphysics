@@ -18,6 +18,12 @@ function geometry() {
   const mesh = new T.BufferGeometry();
   const vertices = new Float32Array((STEPS + 1) * RADIAL * 3);
   const normals = new Float32Array(vertices.length);
+  const uvs = new Float32Array((STEPS + 1) * RADIAL * 2);
+  for (let i = 0; i <= STEPS; i++) for (let j = 0; j < RADIAL; j++) {
+    const index = (i * RADIAL + j) * 2;
+    uvs[index] = i / STEPS;
+    uvs[index + 1] = j / RADIAL;
+  }
   const indices: number[] = [];
   for (let i = 0; i < STEPS; i++) for (let j = 0; j < RADIAL; j++) {
     const a = i * RADIAL + j;
@@ -26,6 +32,7 @@ function geometry() {
   }
   mesh.setAttribute('position', new T.BufferAttribute(vertices, 3).setUsage(T.DynamicDrawUsage));
   mesh.setAttribute('normal', new T.BufferAttribute(normals, 3).setUsage(T.DynamicDrawUsage));
+  mesh.setAttribute('uv', new T.BufferAttribute(uvs, 2));
   const color = new Float32Array(vertices.length).fill(.97);
   mesh.setAttribute('color', new T.BufferAttribute(color, 3));
   mesh.setIndex(indices);
