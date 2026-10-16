@@ -51,6 +51,17 @@ assert.equal(world.strandCount, 8);
 assert.equal(world.fold(), false, 'limit the prototype to eight strands');
 
 world.reset();
+const centerZ = world.strands[0].points[16].z;
+assert.equal(world.snap(), true, 'snap should apply a swing impulse');
+world.step(1 / 120);
+assert(Math.abs(world.strands[0].points[16].z - centerZ) > .01,
+  'a snap must move the middle of the strand in the transverse direction');
+for (let i = 0; i < 360; i++) {
+  world.step(1 / 120);
+  assert(Number.isFinite(world.strands[0].points[16].lengthSq()));
+}
+assert(world.contacts >= 0, 'contact counter must remain well-defined');
+world.reset();
 assert.equal(world.strandCount, 1);
 assert(Math.abs(world.totalLength - initial) < 1e-8);
 world.advance(10);
