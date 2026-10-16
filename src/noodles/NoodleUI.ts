@@ -39,7 +39,7 @@ export function mountNoodleUI(settings: NoodleSettings) {
       <div id="control-body"></div>
       <p class="specimen-note">Pulled, never extruded.<br><span>Flour · Water · Patience</span></p>
     </aside>
-    <footer><span>NOODLE PHYSICS <i>—</i> A little food for curiosity. <i>·</i> <a href="/">Try Pizza Physics</a></span>
+    <footer><span>NOODLE PHYSICS <i>—</i> A little food for curiosity. <i>·</i> <a href="https://pizza.dustinhanke.de" target="_blank" rel="noopener noreferrer">Try Pizza Physics</a></span>
       <span class="performance"><span id="fps">—</span> FPS <i>/</i> <span id="physics">—</span> MS PHYSICS</span></footer>
     <div id="loading" class="loading"><div>NOODLE PHYSICS<span>.</span></div><p>PREPARING DOUGH</p><i></i></div>
     <div id="error" hidden><h2>The kitchen needs a different browser.</h2><p>Try a current browser with WebGL 2 or WebGPU enabled.</p><button id="reload">TRY AGAIN</button></div>
