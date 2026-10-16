@@ -15,7 +15,7 @@ assert(open>5,'no visible perforations');assert(joined>5,'only disconnected para
 writeFileSync('/tmp/pizza-pull-geometry.json',JSON.stringify({position:Array.from(pos.array),index:Array.from(mesh.geometry.index!.array),base:slice.deformables.find(d=>d.mesh===mesh)!.base.length/3,matrix:mesh.matrixWorld.toArray(),ranges:ex.lanes.map(l=>[l.first,l.first+174])}));
 console.log(JSON.stringify({passed:true,mediumWidths:widths,openSections:open,joinedSections:joined,ruptured:strand.broken}));
 // Torn lanes must gather at their own roots, not remain long fading flaps.
-strand.broken=true;strand.age=0;strand.render();
+strand.broken=true;strand.age=0;strand.update(0);strand.render();
 const lane=ex.lanes[0],root=new T.Vector3().fromBufferAttribute(pos,lane.first).lerp(new T.Vector3().fromBufferAttribute(pos,lane.first+2),.5);
 const before=point(0,lane.cut,1).distanceTo(root);
 strand.time+=.65;strand.age=.65;strand.render();

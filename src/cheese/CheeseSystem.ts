@@ -6,6 +6,7 @@ import { params, warmth, reducedMotion } from '../presets/presets';
 import { BridgeLattice } from './BridgeLattice';
 import { CheeseRenderer } from './CheeseRenderer';
 import { CheeseWeb } from './CheeseWeb';
+import { advanceMozzarellaRupture } from './BoundaryExtrusion';
 import type {CollisionWorld} from '../physics/CollisionWorld';
 const anchorInverse=new T.Quaternion();
 const COUNT=10,delta=new T.Vector3(),temp=new T.Vector3(),midpoint=new T.Vector3(),unprojected=new T.Vector3(),a=new T.Vector3(),b=new T.Vector3();
@@ -46,6 +47,7 @@ export class CheeseStrand {
   if(!this.broken)this.damage+=dt*excess*excess*(this.primary?.72:2.3)*(1+Math.max(0,speed-2)*.055);
   this.neck=T.MathUtils.clamp(Math.max(this.damage,T.MathUtils.smoothstep(distance/this.hardLimit,.65,1)),0,1);
   if(!this.broken&&(this.damage>=1||distance>=this.hardLimit)){this.broken=true;this.age=0;}
+  if(this.extrusion&&advanceMozzarellaRupture(this.extrusion,{length:distance,limit:this.hardLimit,broken:this.broken,time:this.time})&&!this.broken){this.broken=true;this.age=0;}
   if(this.broken){this.age+=dt;if(this.age>1.3){this.neckA.amount=this.neckB.amount=0;return;}}
   const draw=this.extrusion?0:T.MathUtils.smoothstep(distance,.006,.085)*(this.broken?Math.max(0,1-this.age/.6):1)*(this.primary?.012:.005);temp.copy(b).sub(a).normalize();
   this.neckA.direction.copy(temp).applyQuaternion(anchorInverse.copy(this.moving.group.quaternion).invert());this.neckB.direction.copy(temp).negate().applyQuaternion(anchorInverse.copy(this.neighbor.group.quaternion).invert());this.neckA.amount=this.neckB.amount=draw;
@@ -123,7 +125,11 @@ export class CheeseSystem {
   }
 
  }
- beginPull(slice:PizzaSlice){if(slice.group.position.distanceTo(slice.home)<.42&&!this.strands.some(s=>s.moving===slice&&!s.broken))slice.hasCheese=false;}
+ beginPull(slice:PizzaSlice){
+  if(slice.group.position.distanceTo(slice.home)>=.42||this.strands.some(s=>s.moving===slice&&!s.broken))return;
+  for(let i=this.strands.length-1;i>=0;i--){const strand=this.strands[i];if(strand.broken&&(strand.moving===slice||strand.neighbor===slice)){strand.dispose();this.strands.splice(i,1);}}
+  slice.hasCheese=false;
+ }
  update(dt:number){
   for(const slice of this.slices)if(slice.detached&&!slice.hasCheese&&slice.group.position.distanceTo(slice.home)>.075)this.spawn(slice);
   for(let i=this.strands.length-1;i>=0;i--){const s=this.strands[i],was=s.broken;s.update(dt,this.collisions);if(!was&&s.broken){this.failures++;for(const survivor of this.strands)if(survivor!==s&&survivor.moving===s.moving&&!survivor.broken)survivor.load+=.09;}if(s.broken&&s.age>1.65){s.dispose();this.strands.splice(i,1);}}

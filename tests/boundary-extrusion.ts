@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import * as T from 'three';
 import {PizzaSlice} from '../src/pizza/PizzaSlice';
 import {CheeseSystem} from '../src/cheese/CheeseSystem';
+import {advanceMozzarellaRupture} from '../src/cheese/BoundaryExtrusion';
 import {PhysicsWorld} from '../src/physics/PhysicsWorld';
 import {writeFileSync} from 'node:fs';
 const materials:any=Object.fromEntries(['cheese','underside','crumb','crust','dough','sauce','basil','strand'].map(k=>[k,new T.MeshPhysicalMaterial({side:T.DoubleSide})]));
@@ -50,7 +51,7 @@ for(let cycle=0;cycle<4;cycle++){
  if(cycle===0){const m=cheeseMesh(moving);writeFileSync('/tmp/pizza-pull-geometry.json',JSON.stringify({position:Array.from(m.geometry.attributes.position.array),index:Array.from(m.geometry.index!.array),base:original[1].position.length/3,matrix:m.matrixWorld.toArray(),ranges:primaries.filter(s=>s.extrusion!.lanes.length>=3).slice(0,1).flatMap(s=>s.extrusion!.lanes.map(l=>[l.first,l.first+174]))}));}
  closedExtensions();
  // Start a local tear; return toward rest must never heal it.
- for(const strand of primaries){strand.hardLimit=Math.max(.1,strand.length*.9);strand.render();assert(strand.extrusion!.lanes.some(l=>l.brokenAt>=0));const broken=strand.extrusion!.lanes.map(l=>l.brokenAt);strand.hardLimit=100;strand.render();assert.deepEqual(strand.extrusion!.lanes.map(l=>l.brokenAt),broken);}
+ for(const strand of primaries){strand.hardLimit=Math.max(.1,strand.length*.9);advanceMozzarellaRupture(strand.extrusion!,{length:strand.length,limit:strand.hardLimit,broken:false,time:strand.time});strand.render();assert(strand.extrusion!.lanes.some(l=>l.brokenAt>=0));const broken=strand.extrusion!.lanes.map(l=>l.brokenAt);strand.hardLimit=100;strand.render();assert.deepEqual(strand.extrusion!.lanes.map(l=>l.brokenAt),broken);}
  validate();
  // Broken chains have two independent particle curves: no face can span the solver gap.
  for(const strand of primaries){strand.broken=true;strand.age=0;strand.time+=.01;}

@@ -8,10 +8,16 @@ export type MozzarellaExtrusion={
  sampleSurface?:(u:number,t:number,out:T.Vector3)=>T.Vector3,
  sampleTarget:(id:number,out:T.Vector3,bottom?:boolean)=>void,
  targetAttribute:(id:number,name:string,component:number)=>number,
- visible?:boolean,fragments?:[T.CatmullRomCurve3,T.CatmullRomCurve3],uvReady?:boolean,
+ topologyDirty?:boolean,visible?:boolean,fragments?:[T.CatmullRomCurve3,T.CatmullRomCurve3],uvReady?:boolean,
  core:number[],holes:{center:number,span:number,width:number,phase:number}[],sourcePoints:T.Vector3[],targetPoints:T.Vector3[],
 };
 export type PullState={length:number,limit:number,neck:number,broken:boolean,age:number,time:number,breakPoint:number};
+
+export function advanceMozzarellaRupture(pull:MozzarellaExtrusion,state:Pick<PullState,'length'|'limit'|'broken'|'time'>){
+ const relative=state.length/Math.max(.1,state.limit);
+ for(const lane of pull.lanes)if(lane.brokenAt<0&&(state.broken||relative>lane.limit)){lane.brokenAt=state.time;pull.topologyDirty=true;}
+ return pull.lanes.every(lane=>lane.brokenAt>=0);
+}
 
 /** Local extensions using existing mozzarella boundary samples and material.
  * Closed embedded roots preserve every resting surface face.
@@ -29,6 +35,7 @@ export class BoundaryExtrusions {
  private srcCenter=new T.Vector3();private dstCenter=new T.Vector3();private targetLeft=new T.Vector3();private targetRight=new T.Vector3();
  private rootLeft=new T.Vector3();private rootRight=new T.Vector3();private farLeft=new T.Vector3();private farRight=new T.Vector3();
  private clump=new T.Vector3();private clumpNormal=new T.Vector3();
+ private widthDirection=new T.Vector3();private profileNormal=new T.Vector3();
  private inv=new T.Matrix4();private normalMatrix=new T.Matrix3();
  constructor(readonly mesh:T.Mesh,readonly topCount:number){
   this.restCount=mesh.geometry.attributes.position.count;this.baseIndex=Array.from(mesh.geometry.index!.array);
@@ -50,7 +57,7 @@ export class BoundaryExtrusions {
   let value=pull.core[k];
   if(k>0&&k<pull.core.length-1){
    const span=Math.min(pull.core[k]-pull.core[k-1],pull.core[k+1]-pull.core[k]);
-   value+=span*.04*Math.sin(t*8+pull.holes[k-1].phase)*Math.sin(Math.PI*t)*opening;
+   value+=span*.12*Math.sin(t*8+pull.holes[k-1].phase)*Math.sin(Math.PI*t)*opening;
   }
   const sway=.035*Math.sin(t*7+pull.seed)*Math.sin(Math.PI*t)*opening;
   return .5+(value-.5)*this.flowEnvelope(t,opening)+sway;
@@ -113,6 +120,7 @@ export class BoundaryExtrusions {
  }
  update(pull:MozzarellaExtrusion,curve:T.CatmullRomCurve3,state:PullState){
   if(!pull.active)return;
+  if(pull.topologyDirty){this.dirty=true;pull.topologyDirty=false;}
   this.mesh.updateWorldMatrix(true,false);this.inv.copy(this.mesh.matrixWorld).invert();this.normalMatrix.getNormalMatrix(this.inv);
   const g=this.mesh.geometry,pos=g.attributes.position,normal=g.attributes.normal,sss=g.attributes.sssThickness;
   // Correct endpoints without mutating the simulation's particles.
@@ -131,7 +139,6 @@ export class BoundaryExtrusions {
   const relative=state.length/Math.max(.1,state.limit),perforation=T.MathUtils.smoothstep(state.length,.16,.95);
   for(let laneIndex=0;laneIndex<pull.lanes.length;laneIndex++){
    const lane=pull.lanes[laneIndex];
-   if(lane.brokenAt<0&&(state.broken||relative>lane.limit)){lane.brokenAt=state.time;this.dirty=true;}
    this.boundary(pull.sourcePoints,lane.u0,this.a);this.boundary(pull.sourcePoints,lane.u1,this.b);
    this.boundary(pull.targetPoints,lane.u0,this.c);this.boundary(pull.targetPoints,lane.u1,this.d);
    const tearAge=lane.brokenAt<0?0:Math.max(0,state.time-lane.brokenAt);
@@ -164,6 +171,9 @@ export class BoundaryExtrusions {
     const weak=1-.90*neck*Math.exp(-Math.pow((t-tip)/.10,2));
     const torn=lane.brokenAt<0?1:Math.max(.015,Math.min(1,Math.abs(t-freeEnd)*6));
     const widthScale=weak*torn;
+    this.widthDirection.copy(this.rootRight).sub(this.rootLeft).lerp(this.offset.copy(this.farRight).sub(this.farLeft),t);
+    const sectionWidth=this.widthDirection.length()*widthScale;
+    this.widthDirection.transformDirection(this.inv).addScaledVector(this.normal,-this.widthDirection.dot(this.normal)).normalize();
     // Surface tension gathers a torn ribbon into a low, folded root mound.
     // Keep mass visible during retraction instead of fading a long loose flap.
     const gather=lane.brokenAt<0?0:1-Math.exp(-tearAge*8);
@@ -186,11 +196,17 @@ export class BoundaryExtrusions {
       this.p.lerp(this.clump,gather);
      }
      this.p.applyMatrix4(this.inv);
-     const thick=T.MathUtils.lerp((.0025+.007*root)/Math.sqrt(1+state.length*1.2),.014*settle,gather)*(.65+.35*Math.sin(Math.PI*u));
+     // Crown and edge normals give the shared cheese material a rounded highlight.
+     const crown=Math.max((.0025+.007*root)/Math.sqrt(1+state.length*1.2),Math.min(sectionWidth*.55,.012/Math.sqrt(1+state.length*.6))*morph*(.88+.12*Math.sin(t*13+pull.seed)));
+     const profile=Math.sin(Math.PI*u),thick=T.MathUtils.lerp(crown,.014*settle,gather)*T.MathUtils.lerp(.18+.82*profile,.65+.35*profile,gather);
      const top=lane.first+row*ACROSS+col,bottom=top+LAYER;
      pos.setXYZ(top,this.p.x+this.normal.x*thick*.5,this.p.y+this.normal.y*thick*.5,this.p.z+this.normal.z*thick*.5);
      pos.setXYZ(bottom,this.p.x-this.normal.x*thick*.5,this.p.y-this.normal.y*thick*.5,this.p.z-this.normal.z*thick*.5);
-     normal.setXYZ(top,this.normal.x,this.normal.y,this.normal.z);normal.setXYZ(bottom,-this.normal.x,-this.normal.y,-this.normal.z);
+     const roundness=morph*(1-gather),slope=(2*u-1)*crown*roundness;
+     this.profileNormal.copy(this.normal).multiplyScalar(sectionWidth*T.MathUtils.lerp(1,profile,roundness)).addScaledVector(this.widthDirection,slope).normalize();
+     normal.setXYZ(top,this.profileNormal.x,this.profileNormal.y,this.profileNormal.z);
+     this.profileNormal.copy(this.normal).multiplyScalar(-sectionWidth*T.MathUtils.lerp(1,profile,roundness)).addScaledVector(this.widthDirection,slope).normalize();
+     normal.setXYZ(bottom,this.profileNormal.x,this.profileNormal.y,this.profileNormal.z);
      // Material coordinates are sampled from the source surface, never reset to 0..1 per strip.
      if(!pull.uvReady)for(const key of ['uv','uv1']){
       const attr=g.attributes[key],v=T.MathUtils.lerp(lane.u0,lane.u1,u);
