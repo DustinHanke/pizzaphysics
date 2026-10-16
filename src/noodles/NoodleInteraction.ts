@@ -60,14 +60,19 @@ export class NoodleInteraction {
     if (this.pointer !== null || this.orbitPointer !== null) return;
     this.cast(e);
     const grip = this.ray.intersectObjects([this.grips.left, this.grips.right])[0];
+    // Large invisible pointer tolerance for finger-sized targets on mobile.
+    const dl = this.ray.ray.distanceToPoint(this.world.left);
+    const dr = this.ray.ray.distanceToPoint(this.world.right);
+    const nearby = Math.min(dl, dr) < .58 ? (dl < dr ? 'left' : 'right') : null;
+    const side = grip ? grip.object.userData.side as 'left' | 'right' : nearby;
     const orbitGesture = e.button === 1 || e.button === 2 || e.shiftKey || e.altKey;
-    if (grip && !orbitGesture && e.button === 0) {
-      this.activeSide = grip.object.userData.side as 'left' | 'right';
+    if (side && !orbitGesture && e.button === 0) {
+      this.activeSide = side;
       this.pointer = e.pointerId;
       this.camera.getWorldDirection(facing);
       const handle = this.world[this.activeSide];
       this.plane.setFromNormalAndCoplanarPoint(facing, handle);
-      this.dragOffset.copy(handle).sub(grip.point);
+      this.dragOffset.copy(handle).sub(grip ? grip.point : this.ray.ray.closestPointToPoint(handle, point));
       this.canvas.classList.add('dragging');
       this.onPull();
     } else {
