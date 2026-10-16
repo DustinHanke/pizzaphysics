@@ -59,13 +59,14 @@ export class NoodleWorld {
     this.strands = Array.from({ length: count }, (_, strand) => {
       const points: T.Vector3[] = [];
       const previous: T.Vector3[] = [];
-      const offset = (strand - (count - 1) / 2) * .075;
+      const offset = (strand - (count - 1) / 2) * .17;
       const sag = Math.sqrt(Math.max(.02, length * length - a.distanceToSquared(b))) * .38;
       for (let i = 0; i <= SEGMENTS; i++) {
         const t = i / SEGMENTS;
         const point = new T.Vector3().lerpVectors(a, b, t);
         point.y -= sag * Math.sin(Math.PI * t);
-        point.z += offset * Math.sin(Math.PI * t);
+        point.y += offset * Math.sin(Math.PI * t);
+        point.z += offset * .26 * Math.sin(Math.PI * t);
         points.push(point);
         previous.push(point.clone());
       }
@@ -117,7 +118,7 @@ export class NoodleWorld {
 
   /** A new fold requires additional extension since the previous fold. */
   get canFold() {
-    return this.strandCount < MAX_STRANDS && this.materialLength >= 2.55
+    return !this.folding && this.strandCount < MAX_STRANDS && this.materialLength >= 2.55
       && this.totalLength >= this.lastFoldTotalLength * 1.22;
   }
 
@@ -231,20 +232,24 @@ export class NoodleWorld {
       previous[0].copy(points[0]);
       previous[SEGMENTS].copy(points[SEGMENTS]);
     }
-    // Soft lane constraints approximate strand-to-strand contact without an
-    // expensive all-pairs capsule solver. Adjacent strands separate only if
-    // their thickness requires it; nearby ends can remain joined by the pull.
-    for (let k = 1; k < this.strands.length; k++) {
-      const prev = this.strands[k - 1].points;
-      const next = this.strands[k].points;
-      const diameter = Math.max(.035, this.radius * 1.75);
-      for (let i = 3; i < SEGMENTS - 2; i++) {
-        delta.subVectors(next[i], prev[i]);
-        const d = delta.length();
-        if (d < diameter && d > 1e-7) {
-          delta.multiplyScalar((diameter - d) * .18 / d);
-          next[i].add(delta);
-          prev[i].sub(delta);
+    // Separated lanes keep doubled strands visually legible without pretending
+    // to be a full all-pairs contact solver. Their free middles fan apart,
+    // while the tips still converge under the two pinched fingertips.
+    if (this.strands.length > 1) {
+      const count = this.strands.length;
+      const gap = Math.max(.105, this.radius * 2.7);
+      for (let i = 2; i < SEGMENTS - 1; i++) {
+        const phase = Math.sin(Math.PI * i / SEGMENTS);
+        const envelope = Math.pow(Math.max(0, phase), .8);
+        let middleY = 0;
+        for (const strand of this.strands) middleY += strand.points[i].y;
+        middleY /= count;
+        for (let k = 0; k < count; k++) {
+          const p = this.strands[k].points[i];
+          const lane = (k - (count - 1) * .5) * gap * envelope;
+          p.y += (middleY + lane - p.y) * .19;
+          p.z += ((k - (count - 1) * .5) * .026 * envelope - p.z * .025) * .03;
+          if (p.y < .44) p.y = .44;
         }
       }
     }
