@@ -2,7 +2,7 @@ import * as T from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import type { NoodleWorld } from './NoodleWorld';
 
-const RADIAL = 12;
+const RADIAL = 16;
 const SEGMENTS = 32;
 const tangent = new T.Vector3();
 const normal = new T.Vector3();
@@ -83,10 +83,11 @@ function createFlourTexture() {
 }
 function createTubeGeometry() {
   const geometry = new T.BufferGeometry();
-  const positions = new Float32Array((SEGMENTS + 1) * RADIAL * 3);
+  const count = (SEGMENTS + 1) * RADIAL;
+  const positions = new Float32Array((count + 2) * 3);
   const normals = new Float32Array(positions.length);
   const colors = new Float32Array(positions.length);
-  const uvs = new Float32Array((SEGMENTS + 1) * RADIAL * 2);
+  const uvs = new Float32Array((count + 2) * 2);
   const indices: number[] = [];
   for (let i = 0; i <= SEGMENTS; i++) for (let j = 0; j < RADIAL; j++) {
     const a = (i * RADIAL + j) * 2;
@@ -96,6 +97,12 @@ function createTubeGeometry() {
   for (let i = 0; i < SEGMENTS; i++) for (let j = 0; j < RADIAL; j++) {
     const a = i * RADIAL + j, b = i * RADIAL + (j + 1) % RADIAL;
     indices.push(a, b, a + RADIAL, b, b + RADIAL, a + RADIAL);
+  }
+  // Dedicated centers seal the otherwise open, sawed-off tube ends.
+  for (let j = 0; j < RADIAL; j++) {
+    indices.push(count, (j + 1) % RADIAL, j);
+    const last = SEGMENTS * RADIAL;
+    indices.push(count + 1, last + j, last + (j + 1) % RADIAL);
   }
   geometry.setAttribute('position', new T.BufferAttribute(positions, 3).setUsage(T.DynamicDrawUsage));
   geometry.setAttribute('normal', new T.BufferAttribute(normals, 3).setUsage(T.DynamicDrawUsage));
@@ -111,7 +118,7 @@ export class NoodleRenderer {
   private meshes: T.Mesh[] = [];
   private doughTexture = createDoughTexture();
   private dough = new T.MeshPhysicalMaterial({
-    color: '#f3dbac', map: this.doughTexture, roughness: .84, metalness: 0,
+    color: '#f6d7a3', map: this.doughTexture, roughness: .89, metalness: 0,
     clearcoat: .03, clearcoatRoughness: .8, vertexColors: true,
     side: T.DoubleSide
   });
@@ -193,17 +200,25 @@ export class NoodleRenderer {
         binormal.crossVectors(tangent, normal).normalize();
         const p = world.getRenderPoint(strandIndex, i, oldPoint);
         const t = i / SEGMENTS;
-        const tip = (1 - smoothstep(0, .16, t)) + smoothstep(.84, 1, t);
-        const grip = Math.exp(-Math.pow((Math.min(t, 1 - t) - .045) / .045, 2));
-        // Pinched, slightly flattened ends are part of the same mesh, not balls attached to it.
-        const radius = world.radius * (1 + .32 * tip + .2 * grip);
-        const flatten = .68 + .32 * smoothstep(0, .19, Math.min(t, 1 - t));
+        const distToTip = Math.min(t, 1 - t);
+        // Sculpted tip profile: a rounded narrow end, shoulders of thicker dough,
+        // then visibly uneven material across the rest of the strand.
+        const rolledEnd = .19 + .81 * smoothstep(0, .107, distToTip);
+        const shoulder = .42 * Math.exp(-Math.pow((distToTip - .11) / .075, 2));
+        const slowWaves = .095 * Math.sin(t * 7.7 + strandIndex * .62)
+          + .066 * Math.sin(t * 18.9 + 1.1 + strandIndex * .19)
+          + .033 * Math.sin(t * 41.3 + 2.6);
+        const radius = world.radius * 1.34 * (1 + shoulder + slowWaves) * rolledEnd;
+        const flatten = .86 + .14 * smoothstep(0, .13, distToTip);
+        // Approximate the meridian slope for round rather than flat end shading.
+        const tipSlope = distToTip < .11 ? .63 * (1 - smoothstep(0, .11, distToTip)) * (t < .5 ? -1 : 1) : 0;
         for (let j = 0; j < RADIAL; j++) {
           const angle = j / RADIAL * Math.PI * 2;
           const c = Math.cos(angle), s = Math.sin(angle);
           const grainValue = grain(i * 13.17 + j * 1.339 + strandIndex * 71.1);
-          const longitudinal = Math.sin(t * 46 + strandIndex * 3.1 + Math.sin(angle) * 2);
-          const relief = 1 + .028 * longitudinal + .018 * (grainValue - .5);
+          const longitudinal = Math.sin(t * 32 + strandIndex * 3.1 + Math.sin(angle) * 2);
+          const relief = 1 + .036 * longitudinal + .018 * (grainValue - .5)
+            + .016 * Math.sin(angle * 4 + t * 73 + strandIndex);
           const r = radius * relief;
           const index = (i * RADIAL + j) * 3;
           const nx = normal.x * c + binormal.x * s * flatten;
@@ -213,14 +228,34 @@ export class NoodleRenderer {
           positions[index + 1] = p.y + r * ny;
           positions[index + 2] = p.z + r * nz;
           const nlen = Math.hypot(nx, ny, nz) || 1;
-          normals[index] = nx / nlen;
-          normals[index + 1] = ny / nlen;
-          normals[index + 2] = nz / nlen;
-          const warmth = .92 + grainValue * .12 - tip * .045 + .035 * Math.sin(angle * 3 + i * .53);
+          normals[index] = nx / nlen + tangent.x * tipSlope;
+          normals[index + 1] = ny / nlen + tangent.y * tipSlope;
+          normals[index + 2] = nz / nlen + tangent.z * tipSlope;
+          // Broad, soft flour bloom and dough creases, not random black speckles.
+          const flour = .075 * Math.pow(Math.max(0, Math.sin(t * 24.1 + Math.sin(angle * 2.5) * 1.2)), 7);
+          const warmth = .92 + grainValue * .085 + flour - shoulder * .045
+            + .022 * Math.sin(angle * 3 + i * .43);
           colors[index] = warmth;
           colors[index + 1] = warmth * .988;
           colors[index + 2] = warmth * .953;
         }
+      }
+      // Smoothed end caps share the same dough shader and round off each grip.
+      for (let end = 0; end < 2; end++) {
+        const p = world.getRenderPoint(strandIndex, end ? SEGMENTS : 0, oldPoint);
+        const o = ((SEGMENTS + 1) * RADIAL + end) * 3;
+        positions[o] = p.x;
+        positions[o + 1] = p.y;
+        positions[o + 2] = p.z;
+        world.getRenderPoint(strandIndex, end ? SEGMENTS : 1, tangent);
+        world.getRenderPoint(strandIndex, end ? SEGMENTS - 1 : 0, binormal);
+        tangent.sub(binormal).normalize().multiplyScalar(end ? 1 : -1);
+        normals[o] = tangent.x;
+        normals[o + 1] = tangent.y;
+        normals[o + 2] = tangent.z;
+        colors[o] = .98;
+        colors[o + 1] = .97;
+        colors[o + 2] = .95;
       }
       geometry.attributes.position.needsUpdate = true;
       geometry.attributes.normal.needsUpdate = true;
