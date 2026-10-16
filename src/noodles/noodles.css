@@ -1,0 +1,14 @@
+.noodle-experiment .controls-intro h2 { margin-top: 24px; }
+.noodle-experiment .stage { background: #181512; }
+.noodle-experiment .view-actions #fold { background: #332b25; border-color: #332b25; color: #faf1df; }
+.noodle-experiment .view-actions #fold:hover { background: #654735; color: #fff; }
+.noodle-experiment .stage-actions .view-actions button span { font-size: 15px; margin-left: 6px; }
+.noodle-experiment footer a { color: #a93d29; text-decoration: none; border-bottom: 1px solid currentColor; }
+.noodle-experiment footer a:hover { color: #792e21; }
+.noodle-experiment .pull-hint { text-shadow: 0 1px 8px #171513; }
+.noodle-experiment .controls-intro p { max-width: 245px; }
+@media(max-width:480px) {
+  .noodle-experiment .view-actions button { padding: 9px 12px; }
+  .noodle-experiment .stage-actions .view-actions button span { display: none; }
+  .noodle-experiment .telemetry dt { line-height: 1.4; }
+}
