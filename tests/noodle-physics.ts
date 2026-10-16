@@ -25,6 +25,12 @@ assert.equal(world.strandCount, 2);
 assert(Math.abs(world.totalLength - beforeFold) < 1e-7, 'fold must preserve overall rest length');
 assert(Math.abs(volumeProxy - world.totalLength * world.radius ** 2) < 1e-9, 'fold must preserve radius-weighted volume');
 assert.equal(world.fold(), false, 'fold must require another pull');
+for (let i = 0; i < 120; i++) world.step(1 / 120);
+assert.equal(world.folding, false, 'fold transition must complete deterministically');
+assert(world.strands[0].points[16].distanceTo(world.strands[1].points[16]) > .14,
+  'doubled strands must visibly separate instead of occupying the same path');
+for (const strand of world.strands) for (const p of strand.points)
+  assert(Number.isFinite(p.lengthSq()), 'folded particle positions must remain finite');
 
 let count = world.strandCount;
 for (let n = 0; n < 2; n++) {
