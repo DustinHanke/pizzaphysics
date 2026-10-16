@@ -27,8 +27,8 @@ export class NoodleWorld {
   accumulator = 0;
   timeMs = 0;
   settings: NoodleSettings = { plasticity: 65, softness: 48, gravity: 65 };
-  readonly left = new T.Vector3(-1.48, 2.95, 0);
-  readonly right = new T.Vector3(1.48, 2.95, 0);
+  readonly left = new T.Vector3(-1.48, 1.55, 0);
+  readonly right = new T.Vector3(1.48, 1.55, 0);
   readonly leftTarget = this.left.clone();
   readonly rightTarget = this.right.clone();
   strands: NoodleStrand[] = [];
@@ -60,7 +60,7 @@ export class NoodleWorld {
       const points: T.Vector3[] = [];
       const previous: T.Vector3[] = [];
       const offset = (strand - (count - 1) / 2) * .075;
-      const sag = Math.sqrt(Math.max(.02, length * length - a.distanceToSquared(b))) * .18;
+      const sag = Math.sqrt(Math.max(.02, length * length - a.distanceToSquared(b))) * .38;
       for (let i = 0; i <= SEGMENTS; i++) {
         const t = i / SEGMENTS;
         const point = new T.Vector3().lerpVectors(a, b, t);
@@ -78,8 +78,8 @@ export class NoodleWorld {
   }
 
   reset() {
-    this.left.set(-1.48, 2.95, 0);
-    this.right.set(1.48, 2.95, 0);
+    this.left.set(-1.48, 1.55, 0);
+    this.right.set(1.48, 1.55, 0);
     this.leftTarget.copy(this.left);
     this.rightTarget.copy(this.right);
     this.accumulator = 0;
@@ -132,7 +132,7 @@ export class NoodleWorld {
     const length = this.materialLength * .5;
     const halfSpan = Math.min(1.15, length * .35);
     const center = tmp.copy(this.left).add(this.right).multiplyScalar(.5);
-    const y = T.MathUtils.clamp(center.y, 1.7, 3.5);
+    const y = T.MathUtils.clamp(center.y, 1.25, 3.5);
     this.left.set(-halfSpan, y, 0);
     this.right.set(halfSpan, y, 0);
     this.leftTarget.copy(this.left);
