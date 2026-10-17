@@ -49,12 +49,12 @@ export class NoodleWorld {
     return T.MathUtils.clamp(Math.max(left, right) / .95, 0, 1);
   }
   getGripLag(side: 'left' | 'right') {
-    return this.held[side] ? this[side].distanceTo(this[`${side}Target`]) : 0;
+    return this.held[side] ? this[side].distanceTo(side === 'left' ? this.leftTarget : this.rightTarget) : 0;
   }
   getGripHeld(side: 'left' | 'right') { return this.held[side]; }
   setGripHeld(side: 'left' | 'right', held: boolean) {
     if (held && (this.torn || this.folding)) return;
-    if (held && !this.held[side]) this[`${side}Target`].copy(this[side]);
+    if (held && !this.held[side]) (side === 'left' ? this.leftTarget : this.rightTarget).copy(this[side]);
     this.held[side] = held;
     if (held) this.touched[side] = true;
   }
