@@ -67,6 +67,8 @@ export class NoodleWorld {
   steps = 0;
   private lastFoldTotalLength = INITIAL_LENGTH;
   contacts = 0;
+  // Preallocated AABBs: 6 floats per strand (min/max XYZ), reused every step.
+  private readonly contactBounds = new Float32Array(MAX_STRANDS * 6);
   /** Smoothed recent high-speed tension; damage persists after release. */
   private transientLoad = 0;
   /** The first severed segment, or null while the rope remains intact. */
@@ -406,8 +408,8 @@ export class NoodleWorld {
           if (strand.brokenAt === i || strand.brokenAt === i - 1) {
             // Free, torn material ends must not be reconnected by bend smoothing.
           } else points[i].lerp(tmp, smooth);
-          if (points[i].y < .32 + this.radius * NOMINAL_SURFACE_RADIUS) {
-            points[i].y = .32 + this.radius * NOMINAL_SURFACE_RADIUS;
+          if (points[i].y < .32 + radiusAtStart * NOMINAL_SURFACE_RADIUS) {
+            points[i].y = .32 + radiusAtStart * NOMINAL_SURFACE_RADIUS;
             // Cancel the normal velocity rather than creating a fake bounce.
             previous[i].y = points[i].y;
             previous[i].x += (points[i].x - previous[i].x) * .14;
@@ -474,12 +476,20 @@ export class NoodleWorld {
     this.solveStrandContacts();
     // Contacts can push material back through the bench. Apply a final,
     // velocity-consistent projection after all strand contacts.
-    for (let k = 0; k < this.strandCount; k++) for (let i = 1; i < SEGMENTS; i++) {
+    // One radius and one average rest length per strand, not 31 full-bundle
+    // scans on every physics tick at 16-strand detail.
+    const floorRadius = this.radius;
+    for (let k = 0; k < this.strandCount; k++) {
       const strand = this.strands[k];
-      const floor = .32 + this.getLocalRadius(k, i / SEGMENTS) * NOMINAL_SURFACE_RADIUS;
-      if (strand.points[i].y < floor) {
-        strand.points[i].y = floor;
-        strand.previous[i].y = floor;
+      let restSum = 0;
+      for (let j = 0; j < SEGMENTS; j++) restSum += strand.rest[j];
+      const meanRest = restSum / SEGMENTS;
+      for (let i = 1; i < SEGMENTS; i++) {
+        const floor = .32 + this.getLocalRadius(k, i / SEGMENTS, floorRadius, meanRest) * NOMINAL_SURFACE_RADIUS;
+        if (strand.points[i].y < floor) {
+          strand.points[i].y = floor;
+          strand.previous[i].y = floor;
+        }
       }
     }
     this.steps++;
@@ -520,10 +530,33 @@ export class NoodleWorld {
       pa.addScaledVector(contactNormal, -.45); pb.addScaledVector(contactNormal, .45);
       this.contacts++;
     };
+    const bounds = this.contactBounds;
+    // Broadphase rejects widely separated folded strands before the costly
+    // narrowphase point-pair tests. Includes padding for contact radius.
+    for (let k = 0; k < this.strands.length; k++) {
+      const points = this.strands[k].points;
+      let minX = Infinity, minY = Infinity, minZ = Infinity;
+      let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+      for (let i = 2; i < SEGMENTS - 1; i++) {
+        const p = points[i];
+        if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+        if (p.z < minZ) minZ = p.z; if (p.z > maxZ) maxZ = p.z;
+      }
+      const index = k * 6;
+      bounds[index] = minX; bounds[index + 1] = maxX;
+      bounds[index + 2] = minY; bounds[index + 3] = maxY;
+      bounds[index + 4] = minZ; bounds[index + 5] = maxZ;
+    }
     for (let k = 0; k < this.strands.length; k++) {
       const a = this.strands[k];
+      const ai = k * 6;
       for (let j = k + 1; j < this.strands.length; j++) {
         const b = this.strands[j];
+        const bi = j * 6;
+        if (bounds[ai] - gap > bounds[bi + 1] || bounds[bi] - gap > bounds[ai + 1] ||
+            bounds[ai + 2] - gap > bounds[bi + 3] || bounds[bi + 2] - gap > bounds[ai + 3] ||
+            bounds[ai + 4] - gap > bounds[bi + 5] || bounds[bi + 4] - gap > bounds[ai + 5]) continue;
         for (let i = 2; i < SEGMENTS - 1; i++)
           for (let n = Math.max(2, i - 1); n <= Math.min(SEGMENTS - 2, i + 1); n++)
             repel(a.points[i], b.points[n], a.previous[i], b.previous[n], 1 + k * 23 + j);
