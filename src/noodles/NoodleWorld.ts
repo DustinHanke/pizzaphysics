@@ -153,7 +153,11 @@ export class NoodleWorld {
     const center = strand.rest[i];
     const after = strand.rest[Math.min(SEGMENTS - 1, i + 1)];
     const localRest = (before + 2 * center + after) * .25;
-    const averageRest = this.totalLength / Math.max(1, this.strandCount * SEGMENTS);
+    // Only the local strand's rest distribution is needed here. Recomputing
+    // the entire bundle for every tube ring becomes costly at 16 strands.
+    let strandRestTotal = 0;
+    for (let j = 0; j < SEGMENTS; j++) strandRestTotal += strand.rest[j];
+    const averageRest = strandRestTotal / SEGMENTS;
     const p = strand.points[i], q = strand.points[i + 1];
     const current = p.distanceTo(q);
     // Blend local strain into the profile without amplifying contact jitter.
