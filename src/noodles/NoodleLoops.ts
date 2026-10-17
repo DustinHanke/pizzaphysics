@@ -83,7 +83,7 @@ export class NoodleLoops {
       const g = mesh.geometry;
       const positions = (g.getAttribute('position') as T.BufferAttribute).array as Float32Array;
       const normals = (g.getAttribute('normal') as T.BufferAttribute).array as Float32Array;
-      const radius = (world.getLocalRadius(k * 2, 1) + world.getLocalRadius(k * 2 + 1, 1)) * .59;
+      const endRadius = (world.getLocalRadius(k * 2, 1) + world.getLocalRadius(k * 2 + 1, 1)) * .5;
       for (let i = 0; i <= STEPS; i++) {
         const t = i / STEPS, a = 1 - t;
         P.copy(START).multiplyScalar(a * a * a)
@@ -106,6 +106,7 @@ export class NoodleLoops {
           const ny = normal.y * x + binormal.y * y;
           const nz = normal.z * x + binormal.z * y;
           const n = (i * RADIAL + j) * 3;
+          const radius = endRadius * (.90 + .33 * Math.sin(Math.PI * t));
           positions[n] = P.x + radius * nx;
           positions[n + 1] = P.y + radius * ny;
           positions[n + 2] = P.z + radius * nz;
