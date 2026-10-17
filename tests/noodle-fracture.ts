@@ -45,6 +45,9 @@ assert.equal(stressed.integrity, 100);
 // Each body segment has 2 * RADIAL triangles, and each cap RADIAL triangles.
 const intact = createTubeIndices(null);
 const torn = createTubeIndices(weakSpot);
+const joined = createTubeIndices(null, true);
+assert.equal(joined.length, intact.length - 16 * 3,
+  'the hidden right endcap must disappear under a connected U-bend');
 assert.equal(intact.length, (32 * 16 * 2 + 2 * 16) * 3);
 assert.equal(torn.length, intact.length, 'one removed wall strip is replaced by two cut caps');
 const bridgeLeft = weakSpot * 16;
