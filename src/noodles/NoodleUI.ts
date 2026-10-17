@@ -57,6 +57,7 @@ export function mountNoodleUI(settings: NoodleSettings) {
   const rows: [keyof NoodleSettings, string, string][] = [
     ['plasticity', 'DOUGH EXTENSIBILITY', '%'],
     ['softness', 'DOUGH SOFTNESS', '%'],
+    ['resistance', 'PULL RESISTANCE', '%'],
     ['gravity', 'GRAVITY', '%'],
   ];
   const panel = document.querySelector('#control-body')!;
