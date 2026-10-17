@@ -7,10 +7,10 @@ export function advanceResistantGrip(
   current: T.Vector3, target: T.Vector3, partner: T.Vector3,
   dt: number, restLength: number, held: boolean,
 ) {
-  const start = current.clone();
+  const startX = current.x, startY = current.y, startZ = current.z;
   if (!held) {
     current.lerp(target, 1 - Math.exp(-dt * 24));
-    return current.distanceTo(start);
+    return Math.hypot(current.x - startX, current.y - startY, current.z - startZ);
   }
 
   const distance = current.distanceTo(target);
@@ -24,6 +24,9 @@ export function advanceResistantGrip(
   const speed = outward ? T.MathUtils.lerp(1.95, .70, extension) : 3.3;
   const easing = 1 - Math.exp(-dt * (outward ? 5.4 : 12));
   const step = Math.min(distance * easing, speed * dt);
-  current.addScaledVector(target.clone().sub(current), step / distance);
-  return current.distanceTo(start);
+  const factor = step / distance;
+  current.x += (target.x - current.x) * factor;
+  current.y += (target.y - current.y) * factor;
+  current.z += (target.z - current.z) * factor;
+  return Math.hypot(current.x - startX, current.y - startY, current.z - startZ);
 }
