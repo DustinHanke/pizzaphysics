@@ -11,7 +11,9 @@ export function castsNoodleShadow(strandIndex: number, count: number, mobile: bo
   return !mobile || count <= 4 || strandIndex % 4 === 0;
 }
 
-const RADIAL = 16;
+// Twelve smoothed sides are sufficient for thin noodles on small screens;
+// desktop retains the original sixteen-sided sculpted tube.
+const RADIAL = quality.mobile ? 12 : 16;
 const SEGMENTS = 32;
 const tangent = new T.Vector3();
 const normal = new T.Vector3();
