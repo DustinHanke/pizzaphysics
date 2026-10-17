@@ -143,3 +143,23 @@
   font-weight: normal;
 }
 .noodle-experiment .noodle-success p { margin: 7px 0 0; font-size: 11px; line-height: 1.55; }
+
+/* V7 physical failure: muted red safety feedback, no modal interruption. */
+.noodle-experiment .noodle-strength { margin-top: 10px; }
+.noodle-experiment .noodle-tear {
+  margin-top: 14px;
+  border: 1px solid #d9a79a;
+  border-radius: 10px;
+  padding: 15px 18px;
+  background: #f6e8e2;
+  color: #743a2c;
+}
+.noodle-experiment .noodle-tear[hidden] { display: none; }
+.noodle-experiment .noodle-tear > span {
+  display: block;
+  font: 9px var(--mono);
+  letter-spacing: .13em;
+  margin-bottom: 7px;
+}
+.noodle-experiment .noodle-tear strong { display: block; font: 22px Georgia, serif; font-weight: normal; }
+.noodle-experiment .noodle-tear p { margin: 7px 0 0; font-size: 11px; line-height: 1.6; }
