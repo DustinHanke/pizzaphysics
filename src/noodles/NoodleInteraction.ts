@@ -18,12 +18,12 @@ export class NoodleInteraction {
   private lastX = 0;
   private lastY = 0;
   private orbitYaw = .04;
-  private orbitPitch = 1.19;
-  private distance = 8.25;
+  private orbitPitch = 1.13;
+  private distance = 7.4;
   private desiredYaw = this.orbitYaw;
   private desiredPitch = this.orbitPitch;
   private desiredDistance = this.distance;
-  private target = new T.Vector3(0, 1.24, 0);
+  private target = new T.Vector3(0, 1.28, 0);
   private dragOffset = new T.Vector3();
   private keyboard = false;
 
@@ -33,12 +33,16 @@ export class NoodleInteraction {
     private world: NoodleWorld,
     private grips: { left: T.Mesh; right: T.Mesh },
     private onPull: () => void,
-    private onFoldGesture: () => void
+    private onFoldGesture: () => void,
+    private onGripState: (side: 'left' | 'right' | null, active: boolean) => void,
   ) {
     canvas.addEventListener('pointerdown', this.down);
     canvas.addEventListener('pointermove', this.move);
     canvas.addEventListener('pointerup', this.up);
     canvas.addEventListener('pointercancel', this.up);
+    canvas.addEventListener('pointerleave', () => {
+      if (this.pointer === null) this.onGripState(null, false);
+    });
     canvas.addEventListener('lostpointercapture', this.up);
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
@@ -75,10 +79,12 @@ export class NoodleInteraction {
       this.plane.setFromNormalAndCoplanarPoint(facing, handle);
       this.dragOffset.copy(handle).sub(grip ? grip.point : this.ray.ray.closestPointToPoint(handle, point));
       this.canvas.classList.add('dragging');
+      this.onGripState(side, true);
       this.onPull();
     } else {
       this.orbitPointer = e.pointerId;
       this.canvas.classList.add('orbiting');
+      this.onGripState(null, false);
     }
     this.lastX = e.clientX;
     this.lastY = e.clientY;
@@ -99,8 +105,13 @@ export class NoodleInteraction {
       this.desiredPitch = T.MathUtils.clamp(this.desiredPitch - (e.clientY - this.lastY) * .006, .55, 1.8);
     } else if (this.pointer === null && this.orbitPointer === null) {
       this.cast(e);
-      const hit = this.ray.intersectObjects([this.grips.left, this.grips.right]).length > 0;
-      this.canvas.classList.toggle('grabbable', hit);
+      const hit = this.ray.intersectObjects([this.grips.left, this.grips.right])[0];
+      const dl = this.ray.ray.distanceToPoint(this.grips.left.position);
+      const dr = this.ray.ray.distanceToPoint(this.grips.right.position);
+      const nearby = Math.min(dl, dr) < .58 ? (dl < dr ? 'left' : 'right') : null;
+      const side = hit ? hit.object.userData.side as 'left' | 'right' : nearby;
+      this.canvas.classList.toggle('grabbable', Boolean(side));
+      this.onGripState(side, false);
     }
     this.lastX = e.clientX;
     this.lastY = e.clientY;
@@ -112,6 +123,7 @@ export class NoodleInteraction {
       this.pointer = null;
       this.activeSide = null;
       this.canvas.classList.remove('dragging');
+      this.onGripState(null, false);
       if (shouldFold) this.onFoldGesture();
     }
     if (e.pointerId === this.orbitPointer) { this.orbitPointer = null; this.canvas.classList.remove('orbiting'); }
@@ -122,13 +134,14 @@ export class NoodleInteraction {
     this.pointer = this.orbitPointer = null;
     this.activeSide = null;
     this.keyboard = false;
-    this.canvas.classList.remove('dragging', 'orbiting');
+    this.onGripState(null, false);
+    this.canvas.classList.remove('dragging', 'orbiting', 'grabbable');
   };
 
   resetView() {
     this.desiredYaw = .04;
-    this.desiredPitch = 1.19;
-    this.desiredDistance = 8.25;
+    this.desiredPitch = 1.13;
+    this.desiredDistance = 7.4;
   }
 
   private key = (e: KeyboardEvent) => {
@@ -161,8 +174,11 @@ export class NoodleInteraction {
     const span = this.world.left.distanceTo(this.world.right);
     const follow = .5 * (this.world.left.y + this.world.right.y);
     this.target.y = T.MathUtils.lerp(this.target.y, T.MathUtils.clamp(follow - .34, 1.13, 2.4), blend * .25);
+    // Keep the whole hand gesture visible on narrow mobile viewports without
+    // zooming the hero dough out unnecessarily on desktop.
+    const fitDistance = span * 1.20 / (2 * Math.tan(35 * Math.PI / 360) * Math.max(.56, this.camera.aspect));
     const framing = Math.max(0, (span - 5.2) * .48);
-    offset.setFromSphericalCoords(this.distance + framing, this.orbitPitch, this.orbitYaw);
+    offset.setFromSphericalCoords(Math.max(this.distance + framing, fitDistance), this.orbitPitch, this.orbitYaw);
     this.camera.position.copy(this.target).add(offset);
     this.camera.lookAt(this.target);
     this.camera.updateMatrixWorld();
