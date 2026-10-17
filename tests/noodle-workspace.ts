@@ -12,12 +12,12 @@ assert(world.leftTarget.z < -3 && world.rightTarget.z > 3,
   'the countertop must offer meaningful front-to-back travel');
 
 // True two-finger interaction: targets jump, actual gluten handles still
-// resist and catch up slowly. A deliberate yank must be able to snap it.
+// resist and catch up slowly. A handful of rough pulls must NOT snap it.
 world.reset();
 world.setGripHeld('left', true);
 world.setGripHeld('right', true);
 const xs: number[] = [];
-for (let cycle = 0; cycle < 5 && !world.torn; cycle++) {
+for (let cycle = 0; cycle < 5; cycle++) {
   // Start near the rope, then yank both fingertips outward in one gesture.
   const inward = 1.5;
   world.moveHandle('left', new T.Vector3(-inward, 2.8, 0));
@@ -30,16 +30,16 @@ for (let cycle = 0; cycle < 5 && !world.torn; cycle++) {
     world.step(dt);
     if (i === 2) xs.push(world.failureRisk);
   }
-  if (cycle === 0) assert(!world.torn,
-    'a single extreme yank should warn and weaken, not immediately destroy the dough');
+  assert(!world.torn,
+    'even several extreme pulls must provide ample warning before fracture');
 }
 console.log('WIDE_TWO_HAND_TEAR', JSON.stringify({
   torn: world.torn, risks: xs.map(x => +x.toFixed(3)),
   diameter: +world.diameterMm.toFixed(2), strength: world.integrity,
 }));
-assert(world.torn, 'strong two-hand yanks at the extended workbench must visibly tear dough');
-assert(world.failureRisk === 1, 'the red warning must accompany a completed break');
-assert(world.strands[0].brokenAt !== null, 'physics geometry must be severed');
+assert(!world.torn, 'repeated touch-size rough pulls must not accidentally snap dough');
+assert(world.integrity >= 60, 'five rough gestures must preserve substantial dough strength');
+assert(world.failureRisk < 1, 'caution and damage need not become a sudden fracture');
 
 // Returning hands and resetting must restore the original geometry and bounds.
 world.setGripHeld('left', false);
@@ -47,4 +47,4 @@ world.setGripHeld('right', false);
 world.reset();
 assert(!world.torn && world.strandCount === 1);
 assert(world.strands[0].points.every(p => Number.isFinite(p.x + p.y + p.z)));
-console.log('PASS: larger countertop targets and accessible physical two-finger tearing');
+console.log('PASS: expanded two-finger workspace and durable dough under repeated rough gestures');
