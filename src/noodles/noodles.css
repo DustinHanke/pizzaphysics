@@ -261,3 +261,20 @@
 .noodle-experiment .noodle-relaxation { margin-top: 10px; }
 .noodle-experiment .noodle-relaxation .track { background: #e3e4d9; }
 .noodle-experiment .noodle-relaxation .track i { background: #8c9b79; }
+
+/* V11: the room to pull should feel like a full work station, not a tiny
+ * inset. Keep the physical countertop centered while giving both fingers
+ * real vertical travel on phones. */
+.noodle-experiment .stage {
+  height: clamp(500px, 72svh, 880px);
+}
+@media (max-width: 900px) {
+  .noodle-experiment .stage {
+    height: clamp(430px, 66svh, 720px);
+  }
+}
+@media (max-width: 480px) {
+  .noodle-experiment .stage {
+    height: clamp(390px, 65svh, 610px);
+  }
+}
