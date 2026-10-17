@@ -22,7 +22,7 @@ const INITIAL_LENGTH = 3.65;
 // World unit = 10 cm; the sculpted tube's nominal center section is 1.26x.
 export const NOODLE_CM_PER_UNIT = 10;
 export const NOMINAL_SURFACE_RADIUS = 1.26;
-const MAX_STRANDS = 8;
+const MAX_STRANDS = 16;
 const tmp = new T.Vector3();
 const delta = new T.Vector3();
 const leftMotion = new T.Vector3(), rightMotion = new T.Vector3();
@@ -169,7 +169,7 @@ export class NoodleWorld {
     }
     return max > 0 ? Math.round(T.MathUtils.clamp(min / max, 0, 1) * 100) : 100;
   }
-  get batchReady() { return !this.folding && this.strandCount >= 8 && this.diameterMm <= 12; }
+  get batchReady() { return !this.folding && this.strandCount >= 16 && this.diameterMm <= 10 && this.uniformity >= 65; }
   get tension() {
     const span = this.left.distanceTo(this.right);
     return Math.round(T.MathUtils.clamp((span / Math.max(.01, this.materialLength) - .76) / .27, 0, 1) * 100);
@@ -278,8 +278,8 @@ export class NoodleWorld {
       }
       lambdas.fill(0);
       for (let pass = 0; pass < SOLVER_PASSES; pass++) {
-        points[0].copy(this.left);
-        points[SEGMENTS].copy(this.right);
+        this.anchorFor(strandIndex, 'left', points[0]);
+        this.anchorFor(strandIndex, 'right', points[SEGMENTS]);
         for (let i = 0; i < SEGMENTS; i++) {
           const a = points[i], b = points[i + 1];
           delta.copy(b).sub(a);
@@ -315,8 +315,8 @@ export class NoodleWorld {
           rest[i] += Math.min(rest[i] * .006, (distance - rest[i]) * creep);
         }
       }
-      points[0].copy(this.left);
-      points[SEGMENTS].copy(this.right);
+      this.anchorFor(strandIndex, 'left', points[0]);
+      this.anchorFor(strandIndex, 'right', points[SEGMENTS]);
       previous[0].copy(points[0]);
       previous[SEGMENTS].copy(points[SEGMENTS]);
     }
@@ -332,6 +332,21 @@ export class NoodleWorld {
       }
     }
     this.steps++;
+  }
+
+  /** Preserve a visible U-shaped return at each doubled loop: free ends
+   * are grouped into pairs, with a wider turning radius at the looped side.
+   * This is a paired-grip constraint, not a continuous volumetric FEM model. */
+  private anchorFor(index: number, side: 'left' | 'right', out: T.Vector3) {
+    out.copy(this[side]);
+    const count = this.strandCount;
+    if (count <= 1) return out;
+    const pairs = Math.ceil(count / 2);
+    const lane = Math.floor(index / 2) - (pairs - 1) * .5;
+    const polarity = index % 2 === 0 ? -1 : 1;
+    out.z += lane * this.radius * 2.75
+      + polarity * this.radius * (side === 'right' ? 1.35 : .63);
+    return out;
   }
 
   /** Bounded particle-level collision approximation. Adjacent particles on
