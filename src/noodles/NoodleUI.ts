@@ -11,11 +11,11 @@ export function mountNoodleUI(settings: NoodleSettings) {
     </header>
     <section class="stage" aria-label="Hand-pulled noodle interaction">
       <div class="stage-caption"><span>LĀMIÀN / THE DOUGH STUDY · Nº 02</span><span>From a single pull.</span></div>
-      <canvas id="scene" tabindex="0" aria-label="Interactive fresh noodle dough. Drag the highlighted ends to stretch. Drag empty space to orbit and scroll to zoom. Press S to swing, F to fold and R to reset."></canvas>
-      <div class="pull-hint" id="hint"><span class="hint-mark" aria-hidden="true">↔</span><span>Grab a glowing end. Gently draw it out.</span></div>
+      <canvas id="scene" tabindex="0" aria-label="Interactive fresh noodle dough. Use two fingertips simultaneously to stretch both highlighted ends. Drag empty space to orbit, scroll to zoom. Press S to swing, F to fold and R to reset."></canvas>
+      <div class="pull-hint" id="hint"><span class="hint-mark" aria-hidden="true">↔</span><span>Use two fingers to pull both ends apart.</span></div>
     </section>
     <div class="stage-actions">
-      <span class="gesture-note">Grab a marked tip to pull · Swing with S · Fold when ready</span>
+      <span class="gesture-note">Two fingers: pull both ends independently · Fold when ready · Scroll to zoom</span>
       <div class="view-actions">
         <button id="camera-reset" title="Reset camera (C)">Reset view</button>
         <button id="snap" title="Snap the dough (S)">Swing <span aria-hidden="true">↝</span></button>
