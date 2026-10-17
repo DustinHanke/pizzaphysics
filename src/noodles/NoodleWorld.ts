@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { advanceResistantGrip } from './PullDynamics';
 
 /** A strand is a small, fixed-budget XPBD chain. Rest lengths grow under tension
  * (plastic flow), rather than springing back like melted cheese. */
@@ -39,6 +40,24 @@ export class NoodleWorld {
   readonly right = new T.Vector3(1.48, 1.55, 0);
   readonly leftTarget = this.left.clone();
   readonly rightTarget = this.right.clone();
+  private readonly held: Record<'left' | 'right', boolean> = { left: false, right: false };
+  private readonly touched: Record<'left' | 'right', boolean> = { left: false, right: false };
+  /** Finger displacement while gluten resists: zero once the finger lifts. */
+  get resistance() {
+    const left = this.held.left ? this.left.distanceTo(this.leftTarget) : 0;
+    const right = this.held.right ? this.right.distanceTo(this.rightTarget) : 0;
+    return T.MathUtils.clamp(Math.max(left, right) / .95, 0, 1);
+  }
+  getGripLag(side: 'left' | 'right') {
+    return this.held[side] ? this[side].distanceTo(this[`${side}Target`]) : 0;
+  }
+  getGripHeld(side: 'left' | 'right') { return this.held[side]; }
+  setGripHeld(side: 'left' | 'right', held: boolean) {
+    if (held && (this.torn || this.folding)) return;
+    if (held && !this.held[side]) this[`${side}Target`].copy(this[side]);
+    this.held[side] = held;
+    if (held) this.touched[side] = true;
+  }
   strands: NoodleStrand[] = [];
   steps = 0;
   private lastFoldTotalLength = INITIAL_LENGTH;
@@ -157,6 +176,8 @@ export class NoodleWorld {
     this.transition = null;
     this.contacts = 0;
     this.transientLoad = 0;
+    this.held.left = this.held.right = false;
+    this.touched.left = this.touched.right = false;
     this.createStrands(1, INITIAL_LENGTH);
   }
 
@@ -252,6 +273,8 @@ export class NoodleWorld {
     this.right.set(halfSpan, y, 0);
     this.leftTarget.copy(this.left);
     this.rightTarget.copy(this.right);
+    this.held.left = this.held.right = false;
+    this.touched.left = this.touched.right = false;
     this.createStrands(this.strandCount * 2, length);
     // Each original strand bends back on itself: the two halves travel together
     // into the doubled arrangement rather than teleporting into parallel tubes.
@@ -287,8 +310,10 @@ export class NoodleWorld {
     const blend = 1 - Math.exp(-dt * 24);
     leftMotion.copy(this.left);
     rightMotion.copy(this.right);
-    this.left.lerp(this.leftTarget, blend);
-    this.right.lerp(this.rightTarget, blend);
+    if (this.held.left) advanceResistantGrip(this.left, this.leftTarget, this.right, dt, this.materialLength, true);
+    else if (!this.touched.left) this.left.lerp(this.leftTarget, blend);
+    if (this.held.right) advanceResistantGrip(this.right, this.rightTarget, this.left, dt, this.materialLength, true);
+    else if (!this.touched.right) this.right.lerp(this.rightTarget, blend);
     leftMotion.subVectors(this.left, leftMotion).clampLength(0, .09);
     rightMotion.subVectors(this.right, rightMotion).clampLength(0, .09);
     const span = this.left.distanceTo(this.right);
