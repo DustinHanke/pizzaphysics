@@ -16,6 +16,14 @@ async function start() {
   const canvas = document.querySelector('#scene') as HTMLCanvasElement;
   const { scene, camera, renderer, resolution, key } = await createScene(canvas);
   const noodles = new NoodleRenderer(scene);
+  // Do not change the shared Pizza Physics renderer: the larger Noodle
+  // workspace needs its own wider key-light shadow frustum.
+  key.shadow.camera.left = -9;
+  key.shadow.camera.right = 9;
+  key.shadow.camera.top = 9;
+  key.shadow.camera.bottom = -9;
+  key.shadow.camera.updateProjectionMatrix();
+  key.shadow.needsUpdate = true;
   // A restrained raking fill emphasizes the PBR normal map's flour and creases
   // without changing the shared Pizza Physics lighting implementation.
   const doughFill = new T.DirectionalLight('#fff9ec', .27);
