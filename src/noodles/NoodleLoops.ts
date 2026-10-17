@@ -1,5 +1,6 @@
 import * as T from 'three';
 import type { NoodleWorld } from './NoodleWorld';
+import { quality } from '../performance/quality';
 
 const RADIAL = 12;
 const STEPS = 10;
@@ -55,7 +56,9 @@ export class NoodleLoops {
     const count = Math.floor(world.strandCount / 2);
     while (this.meshes.length < count) {
       const mesh = new T.Mesh(geometry(), this.material);
-      mesh.castShadow = true;
+      // The narrow folded U-turns contribute little to a soft bench shadow;
+      // avoid a separate shadow draw per loop on mobile.
+      mesh.castShadow = !quality.mobile;
       mesh.frustumCulled = false;
       this.meshes.push(mesh);
       this.scene.add(mesh);
