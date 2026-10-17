@@ -133,6 +133,8 @@ export class NoodleRenderer {
   // A single shared material is reused by all strands, folds and cuttings.
   private dough = createRawDoughMaterial();
   private gripMarks: { left: T.Sprite; right: T.Sprite };
+  private targetMarks: { left: T.Sprite; right: T.Sprite };
+  private strainLinks: { left: T.Line; right: T.Line };
   readonly grips: { left: T.Mesh; right: T.Mesh };
   private flourTexture = createFlourTexture();
   constructor(private scene: T.Scene) {
@@ -182,6 +184,28 @@ export class NoodleRenderer {
       return sprite;
     };
     this.gripMarks = { left: hint(), right: hint() };
+    const targetMark = () => {
+      const sprite = new T.Sprite(new T.SpriteMaterial({ map: marker, transparent: true,
+        opacity: .40, color: '#f8c77d', depthTest: false, depthWrite: false }));
+      sprite.scale.set(.46, .46, 1);
+      sprite.renderOrder = 6;
+      sprite.visible = false;
+      scene.add(sprite);
+      return sprite;
+    };
+    const link = () => {
+      const geometry = new T.BufferGeometry();
+      geometry.setAttribute('position', new T.BufferAttribute(new Float32Array(6), 3).setUsage(T.DynamicDrawUsage));
+      const line = new T.Line(geometry, new T.LineBasicMaterial({ color: '#f2c17c', transparent: true,
+        opacity: .30, depthTest: false, depthWrite: false }));
+      line.frustumCulled = false;
+      line.renderOrder = 5;
+      line.visible = false;
+      scene.add(line);
+      return line;
+    };
+    this.targetMarks = { left: targetMark(), right: targetMark() };
+    this.strainLinks = { left: link(), right: link() };
   }
 
   setGripState(leftActive = false, rightActive = false, hovered: 'left' | 'right' | null = null) {
@@ -217,6 +241,23 @@ export class NoodleRenderer {
     this.grips.right.position.copy(oldPoint);
     this.gripMarks.left.position.copy(this.grips.left.position);
     this.gripMarks.right.position.copy(this.grips.right.position);
+    for (const side of ['left', 'right'] as const) {
+      const lag = world.getGripLag(side);
+      const show = world.getGripHeld(side) && lag > .065 && !world.folding;
+      const ghost = this.targetMarks[side];
+      const link = this.strainLinks[side];
+      ghost.visible = link.visible = show;
+      if (show) {
+        ghost.position.copy(side === 'left' ? world.leftTarget : world.rightTarget);
+        const vertices = (link.geometry.getAttribute('position') as T.BufferAttribute).array as Float32Array;
+        const grip = this.grips[side].position;
+        vertices[0] = grip.x; vertices[1] = grip.y; vertices[2] = grip.z;
+        vertices[3] = ghost.position.x; vertices[4] = ghost.position.y; vertices[5] = ghost.position.z;
+        link.geometry.attributes.position.needsUpdate = true;
+        (link.material as T.LineBasicMaterial).opacity = Math.min(.6, .16 + lag * .24);
+        (ghost.material as T.SpriteMaterial).opacity = Math.min(.78, .25 + lag * .20);
+      }
+    }
     this.loops.update(world);
     for (let strandIndex = 0; strandIndex < world.strands.length; strandIndex++) {
       const geometry = this.meshes[strandIndex].geometry;
