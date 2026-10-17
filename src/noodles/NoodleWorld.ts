@@ -467,7 +467,7 @@ export class NoodleWorld {
           // Gentle pulls and stable holds recover rather than accumulating
           // microscopic damage every physics tick.
           strand.damage[i] = Math.max(0, strand.damage[i] - dt * .017)
-            + danger * susceptibility * dt * 1.05;
+            + danger * susceptibility * dt * .26;
           if (strand.damage[i] >= 1) {
             strand.brokenAt = i;
             // Separate the disconnected endpoints immediately. Each half
