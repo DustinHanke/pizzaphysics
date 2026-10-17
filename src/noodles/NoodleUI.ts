@@ -28,17 +28,19 @@ export function mountNoodleUI(settings: NoodleSettings) {
       <dl>
         <div><dt>Total dough length</dt><dd><span id="length">0</span><small>cm</small></dd></div>
         <div><dt>Strands</dt><dd id="strands">1</dd></div>
-        <div><dt>Thickness</dt><dd><span id="thickness">9.0</span><small>mm</small></dd></div>
+        <div><dt>Avg. diameter</dt><dd><span id="thickness">27.2</span><small>mm</small></dd></div>
         <div class="secondary"><dt>Elongation</dt><dd><span id="stretch">100</span><small>%</small></dd></div>
       </dl>
       <div class="integrity"><div><span>Pull tension</span><span id="tension">0%</span></div><div class="track"><i id="tension-bar"></i></div></div>
-      <p id="status" role="status">DOUGH READY TO PULL</p>
+      <div class="integrity noodle-uniformity"><div><span>Pull quality</span><span id="uniformity">100%</span></div><div class="track"><i id="uniformity-bar"></i></div></div>
+      <p id="status" role="status">GENTLY PULL BOTH HANDS APART</p>
+      <p class="batch-goal">THE NOODLE STUDY <span>→ 16 STRANDS · UNDER 10 MM · 65% UNIFORMITY</span></p>
     </section>
     <aside class="controls">
-      <div class="controls-intro"><span class="small-label">A STUDY IN HAND-PULLED DOUGH</span><h2>The perfect<br><em>pull.</em></h2><p>Every pull thins the dough unevenly. Move the ends and feel its weight settle; fold when the dough is long enough to double the strands.</p></div>
+      <div class="controls-intro"><span class="small-label">A STUDY IN HAND-PULLED DOUGH</span><h2>The perfect<br><em>pull.</em></h2><p>Pull with both hands and keep the thickness even. Excess tension creates weak spots; fold when the dough is ready. Reach 16 strands with consistent texture to finish the study.</p></div>
       <button class="controls-toggle" aria-expanded="true" aria-controls="control-body"><span>Adjust the feel</span><span class="toggle-symbol">−</span></button>
       <div id="control-body"></div>
-      <p class="specimen-note">A little science. A lot of flour.<br><span>01 Pull · 02 Fold · 03 Repeat</span></p>
+      <p class="specimen-note">Feel the dough yield.<br><span>01 Pull evenly · 02 Swing gently · 03 Fold · 04 Refine</span></p>
     </aside>
     <footer><span>NOODLE PHYSICS <i>—</i> A little food for curiosity. <i>·</i> <a href="https://pizza.dustinhanke.de" target="_blank" rel="noopener noreferrer">Try Pizza Physics</a></span>
       <span class="performance"><span id="fps">—</span> FPS <i>/</i> <span id="physics">—</span> MS PHYSICS</span></footer>
