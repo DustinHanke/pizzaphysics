@@ -76,29 +76,45 @@ function createGripTexture() {
   }
   return new T.CanvasTexture(canvas);
 }
+/** A severed constraint must also remove the corresponding tube wall;
+ * the cut ends have their own small, rounded caps. */
+export function createTubeIndices(brokenAt: number | null) {
+  const count = (SEGMENTS + 1) * RADIAL;
+  const indices: number[] = [];
+  for (let i = 0; i < SEGMENTS; i++) {
+    if (i === brokenAt) continue;
+    for (let j = 0; j < RADIAL; j++) {
+      const a = i * RADIAL + j, b = i * RADIAL + (j + 1) % RADIAL;
+      indices.push(a, b, a + RADIAL, b, b + RADIAL, a + RADIAL);
+    }
+  }
+  for (let j = 0; j < RADIAL; j++) {
+    indices.push(count, (j + 1) % RADIAL, j);
+    const last = SEGMENTS * RADIAL;
+    indices.push(count + 1, last + j, last + (j + 1) % RADIAL);
+    if (brokenAt !== null) {
+      const a = brokenAt * RADIAL;
+      const b = (brokenAt + 1) * RADIAL;
+      indices.push(count + 2, a + (j + 1) % RADIAL, a + j);
+      indices.push(count + 3, b + j, b + (j + 1) % RADIAL);
+    }
+  }
+  return indices;
+}
 function createTubeGeometry() {
   const geometry = new T.BufferGeometry();
   const count = (SEGMENTS + 1) * RADIAL;
-  const positions = new Float32Array((count + 2) * 3);
+  const positions = new Float32Array((count + 4) * 3);
   const normals = new Float32Array(positions.length);
   const colors = new Float32Array(positions.length);
-  const uvs = new Float32Array((count + 2) * 2);
+  const uvs = new Float32Array((count + 4) * 2);
   const indices: number[] = [];
   for (let i = 0; i <= SEGMENTS; i++) for (let j = 0; j < RADIAL; j++) {
     const a = (i * RADIAL + j) * 2;
     uvs[a] = i / SEGMENTS * 2.6;
     uvs[a + 1] = j / RADIAL;
   }
-  for (let i = 0; i < SEGMENTS; i++) for (let j = 0; j < RADIAL; j++) {
-    const a = i * RADIAL + j, b = i * RADIAL + (j + 1) % RADIAL;
-    indices.push(a, b, a + RADIAL, b, b + RADIAL, a + RADIAL);
-  }
-  // Dedicated centers seal the otherwise open, sawed-off tube ends.
-  for (let j = 0; j < RADIAL; j++) {
-    indices.push(count, (j + 1) % RADIAL, j);
-    const last = SEGMENTS * RADIAL;
-    indices.push(count + 1, last + j, last + (j + 1) % RADIAL);
-  }
+  indices.push(...createTubeIndices(null));
   geometry.setAttribute('position', new T.BufferAttribute(positions, 3).setUsage(T.DynamicDrawUsage));
   geometry.setAttribute('normal', new T.BufferAttribute(normals, 3).setUsage(T.DynamicDrawUsage));
   geometry.setAttribute('color', new T.BufferAttribute(colors, 3).setUsage(T.DynamicDrawUsage));
@@ -202,6 +218,11 @@ export class NoodleRenderer {
     this.loops.update(world);
     for (let strandIndex = 0; strandIndex < world.strands.length; strandIndex++) {
       const geometry = this.meshes[strandIndex].geometry;
+      const brokenAt = world.strands[strandIndex].brokenAt;
+      if ((geometry.userData.brokenAt ?? null) !== brokenAt) {
+        geometry.setIndex(createTubeIndices(brokenAt));
+        geometry.userData.brokenAt = brokenAt;
+      }
       const positions = (geometry.getAttribute('position') as T.BufferAttribute).array as Float32Array;
       const normals = (geometry.getAttribute('normal') as T.BufferAttribute).array as Float32Array;
       const colors = (geometry.getAttribute('color') as T.BufferAttribute).array as Float32Array;
@@ -279,6 +300,25 @@ export class NoodleRenderer {
         colors[o] = .98;
         colors[o + 1] = .97;
         colors[o + 2] = .95;
+      }
+      if (brokenAt !== null) {
+        // Two separate dough end faces, a short way into the gap for a soft
+        // torn edge instead of an infinitely thin geometry cut.
+        const centers = [brokenAt, brokenAt + 1];
+        for (let side = 0; side < 2; side++) {
+          const ring = centers[side];
+          const p = world.getRenderPoint(strandIndex, ring, oldPoint);
+          const o = ((SEGMENTS + 1) * RADIAL + 2 + side) * 3;
+          const neighbor = side === 0 ? Math.max(0, ring - 1) : Math.min(SEGMENTS, ring + 1);
+          world.getRenderPoint(strandIndex, neighbor, tangent);
+          tangent.sub(p).normalize().multiplyScalar(-1);
+          // Cap bends outwards in the separated end's tangent direction.
+          positions[o] = p.x + tangent.x * .021;
+          positions[o + 1] = p.y + tangent.y * .021;
+          positions[o + 2] = p.z + tangent.z * .021;
+          normals[o] = tangent.x; normals[o + 1] = tangent.y; normals[o + 2] = tangent.z;
+          colors[o] = 1; colors[o + 1] = .99; colors[o + 2] = .97;
+        }
       }
       geometry.attributes.position.needsUpdate = true;
       geometry.attributes.normal.needsUpdate = true;
