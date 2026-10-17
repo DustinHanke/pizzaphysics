@@ -74,6 +74,7 @@ export class NoodleWorld {
 
   private createStrands(count: number, length: number) {
     const a = this.left, b = this.right;
+    const startingRadius = this.radius;
     this.strands = Array.from({ length: count }, (_, strand) => {
       const points: T.Vector3[] = [];
       const previous: T.Vector3[] = [];
@@ -89,7 +90,7 @@ export class NoodleWorld {
           // Match the paired end anchors on the very first fold frame too.
           const pairIndex = Math.floor(strand / 2) - (Math.ceil(count / 2) - 1) * .5;
           const side = strand % 2 === 0 ? -1 : 1;
-          const radius = this.radius;
+          const radius = startingRadius;
           point.z += pairIndex * radius * 2.75
             + side * radius * ((1 - t) * .63 + t * 1.35);
         }
@@ -250,6 +251,7 @@ export class NoodleWorld {
     rightMotion.subVectors(this.right, rightMotion).clampLength(0, .09);
     const span = this.left.distanceTo(this.right);
     const gravity = 3 + this.settings.gravity * .085;
+    const radiusAtStart = this.radius;
     // Less damping preserves hand-driven follow-through after a release.
     const damping = Math.exp(-dt * (.62 + (100 - this.settings.softness) * .010));
     this.contacts = 0;
@@ -290,8 +292,8 @@ export class NoodleWorld {
       }
       lambdas.fill(0);
       for (let pass = 0; pass < SOLVER_PASSES; pass++) {
-        this.anchorFor(strandIndex, 'left', points[0]);
-        this.anchorFor(strandIndex, 'right', points[SEGMENTS]);
+        this.anchorFor(strandIndex, 'left', points[0], radiusAtStart);
+        this.anchorFor(strandIndex, 'right', points[SEGMENTS], radiusAtStart);
         for (let i = 0; i < SEGMENTS; i++) {
           const a = points[i], b = points[i + 1];
           delta.copy(b).sub(a);
@@ -327,8 +329,8 @@ export class NoodleWorld {
           rest[i] += Math.min(rest[i] * .006, (distance - rest[i]) * creep);
         }
       }
-      this.anchorFor(strandIndex, 'left', points[0]);
-      this.anchorFor(strandIndex, 'right', points[SEGMENTS]);
+      this.anchorFor(strandIndex, 'left', points[0], radiusAtStart);
+      this.anchorFor(strandIndex, 'right', points[SEGMENTS], radiusAtStart);
       previous[0].copy(points[0]);
       previous[SEGMENTS].copy(points[SEGMENTS]);
     }
@@ -349,15 +351,15 @@ export class NoodleWorld {
   /** Preserve a visible U-shaped return at each doubled loop: free ends
    * are grouped into pairs, with a wider turning radius at the looped side.
    * This is a paired-grip constraint, not a continuous volumetric FEM model. */
-  private anchorFor(index: number, side: 'left' | 'right', out: T.Vector3) {
+  private anchorFor(index: number, side: 'left' | 'right', out: T.Vector3, radius: number) {
     out.copy(this[side]);
     const count = this.strandCount;
     if (count <= 1) return out;
     const pairs = Math.ceil(count / 2);
     const lane = Math.floor(index / 2) - (pairs - 1) * .5;
     const polarity = index % 2 === 0 ? -1 : 1;
-    out.z += lane * this.radius * 2.75
-      + polarity * this.radius * (side === 'right' ? 1.35 : .63);
+    out.z += lane * radius * 2.75
+      + polarity * radius * (side === 'right' ? 1.35 : .63);
     return out;
   }
 
