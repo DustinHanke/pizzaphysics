@@ -75,7 +75,7 @@ async function start() {
     if (e.code === 'KeyC') controller.resetView();
   });
 
-  const fields = Object.fromEntries(['length', 'strands', 'thickness', 'stretch', 'tension', 'tension-bar', 'uniformity', 'uniformity-bar', 'strength', 'strength-bar', 'tear-notice', 'success', 'status', 'fps', 'physics'].map(id => [id, document.getElementById(id)!]));
+  const fields = Object.fromEntries(['length', 'strands', 'thickness', 'stretch', 'tension', 'tension-bar', 'resistance', 'resistance-bar', 'uniformity', 'uniformity-bar', 'strength', 'strength-bar', 'tear-notice', 'success', 'status', 'fps', 'physics'].map(id => [id, document.getElementById(id)!]));
   let previous = performance.now(), lastUI = 0, lastShadow = 0, frames = 0, elapsed = 0, smoothedPhysics = 0;
   let lastStressBand = 'safe';
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -131,6 +131,10 @@ async function start() {
       fields.thickness.textContent = world.diameterMm.toFixed(1);
       fields.stretch.textContent = String(Math.round(world.drawRatio * 100));
       fields.tension.textContent = `${world.tension}%`;
+      const resistance = Math.round(world.resistance * 100);
+      fields.resistance.textContent = `${resistance}%`;
+      fields['resistance-bar'].style.width = `${resistance}%`;
+      fields['resistance-bar'].style.background = resistance > 65 ? '#b58348' : '#879077';
       fields.uniformity.textContent = `${world.uniformity}%`;
       fields['uniformity-bar'].style.width = `${world.uniformity}%`;
       fields['uniformity-bar'].style.background = world.uniformity < 65 ? '#b94d2c' : '#718766';
@@ -154,11 +158,15 @@ async function start() {
               ? 'THIN SPOT DETECTED — REDUCE TENSION'
               : world.tension > 78
                 ? 'HIGH TENSION — PULL MORE SLOWLY'
+                : world.resistance > .58
+                  ? 'HEAVY DOUGH — HOLD STEADY, LET THE GLUTEN YIELD'
+                  : world.resistance > .22
+                    ? 'FEEL THE RESISTANCE — PULL SLOWLY'
                 : world.canFold
                   ? 'READY TO FOLD — DOUBLE YOUR STRANDS'
                   : world.strandCount === 16
                     ? 'SIXTEEN STRANDS — EVEN OUT YOUR PULL'
-                    : 'PULL STEADILY TO THIN THE DOUGH';
+                    : 'PULL SLOWLY — HOLD TO STRETCH THE DOUGH';
       fields.fps.textContent = String(Math.round(frames / Math.max(.001, elapsed)));
       fields.physics.textContent = smoothedPhysics.toFixed(1);
       lastUI = now;
