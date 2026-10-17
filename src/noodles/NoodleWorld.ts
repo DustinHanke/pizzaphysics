@@ -43,6 +43,8 @@ export class NoodleWorld {
   steps = 0;
   private lastFoldTotalLength = INITIAL_LENGTH;
   contacts = 0;
+  /** Smoothed recent high-speed tension; damage persists after release. */
+  private transientLoad = 0;
   /** The first severed segment, or null while the rope remains intact. */
   get tear() {
     for (let k = 0; k < this.strands.length; k++) {
@@ -56,6 +58,26 @@ export class NoodleWorld {
     let peak = 0;
     for (const strand of this.strands) for (const damage of strand.damage) peak = Math.max(peak, damage);
     return this.torn ? 0 : Math.round(100 * (1 - T.MathUtils.clamp(peak, 0, 1)));
+  }
+  /** Visible feedback matches BOTH immediate pulling load and lasting damage.
+   * Neither an idle gesture nor ordinary bending should trigger a warning. */
+  get failureRisk() {
+    if (this.torn) return 1;
+    return T.MathUtils.clamp(Math.max(1 - this.integrity / 100, this.transientLoad * .53), 0, 1);
+  }
+  /** Smoothed damage at a mesh ring; interpolates across neighboring segments
+   * so a thinning neck forms BEFORE failure instead of popping into existence. */
+  getLocalDamage(strandIndex: number, t: number) {
+    const strand = this.strands[strandIndex];
+    if (!strand) return 0;
+    const center = T.MathUtils.clamp(t, 0, 1) * SEGMENTS;
+    let weighted = 0;
+    for (let i = Math.max(0, Math.floor(center) - 2); i <= Math.min(SEGMENTS - 1, Math.ceil(center) + 2); i++) {
+      const distance = Math.abs(i + .5 - center);
+      const weight = Math.exp(-distance * distance / 2.1);
+      weighted = Math.max(weighted, strand.damage[i] * weight);
+    }
+    return T.MathUtils.clamp(weighted, 0, 1);
   }
   /** Flick the center of the dough; Verlet velocities carry the motion. */
   snap() {
@@ -134,6 +156,7 @@ export class NoodleWorld {
     this.lastFoldTotalLength = INITIAL_LENGTH;
     this.transition = null;
     this.contacts = 0;
+    this.transientLoad = 0;
     this.createStrands(1, INITIAL_LENGTH);
   }
 
@@ -182,7 +205,8 @@ export class NoodleWorld {
     // Blend local strain into the profile without amplifying contact jitter.
     const elastic = T.MathUtils.clamp(current / Math.max(1e-6, center), .85, 1.38);
     const relative = T.MathUtils.clamp(averageRest / Math.max(1e-6, localRest), .45, 1.8);
-    return this.radius * T.MathUtils.clamp(Math.sqrt(relative / Math.sqrt(elastic)), .66, 1.28);
+    const neck = 1 - this.getLocalDamage(strandIndex, t) * .55;
+    return this.radius * T.MathUtils.clamp(Math.sqrt(relative / Math.sqrt(elastic)), .66, 1.28) * neck;
   }
   /** Calibrated to actual mesh units rather than a nominal unrendered diameter. */
   get diameterMm() { return this.radius * NOMINAL_SURFACE_RADIUS * NOODLE_CM_PER_UNIT * 20; }
@@ -274,6 +298,7 @@ export class NoodleWorld {
     // Less damping preserves hand-driven follow-through after a release.
     const damping = Math.exp(-dt * (.62 + (100 - this.settings.softness) * .010));
     this.contacts = 0;
+    this.transientLoad *= Math.exp(-dt * 5);
     const compliance = (.0000008 + this.settings.softness * .00000014) / (dt * dt);
     for (let strandIndex = 0; strandIndex < this.strands.length; strandIndex++) {
       const strand = this.strands[strandIndex];
@@ -360,6 +385,7 @@ export class NoodleWorld {
         // repeated yanks never actually break a noodle.
         const overload = T.MathUtils.clamp((span / Math.max(.01, currentLength) - .77) / .20, 0, 1);
         const danger = violentMotion * overload;
+        this.transientLoad = Math.max(this.transientLoad, danger);
         for (let i = 4; i < SEGMENTS - 4; i++) {
           const irregularity = Math.sin(i * 1.37 + strandIndex * 2.1) ** 2;
           const meanRest = currentLength / SEGMENTS;
