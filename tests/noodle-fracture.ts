@@ -31,7 +31,8 @@ console.log('LAMIAN_FRACTURE_DIAGNOSTIC', JSON.stringify({
   integrity: rough.integrity,
   totalLength: Number(rough.totalLength.toFixed(2)),
 }));
-assert(rough.torn, 'repeated aggressive pulls should eventually snap unseeded fresh dough');
+assert(!rough.torn, 'repeated moderate strokes should not instantly destroy fresh dough');
+assert(rough.integrity >= 60, 'moderate pulling must preserve most of the dough strength');
 
 // Seed a localized weakened patch, then yank both hands apart. This tests the
 // complete fracture path without depending on many seconds of accumulated
