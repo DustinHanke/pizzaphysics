@@ -3,6 +3,13 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import type { NoodleWorld } from './NoodleWorld';
 import { NoodleLoops } from './NoodleLoops';
 import { createRawDoughMaterial } from './DoughMaterial';
+import { quality } from '../performance/quality';
+
+/** Thin folded strands need far fewer expensive shadow draw calls on a
+ * mobile GPU. Preserve every strand and material in the beauty pass. */
+export function castsNoodleShadow(strandIndex: number, count: number, mobile: boolean) {
+  return !mobile || count <= 4 || strandIndex % 4 === 0;
+}
 
 const RADIAL = 16;
 const SEGMENTS = 32;
@@ -279,6 +286,8 @@ export class NoodleRenderer {
 
   update(world: NoodleWorld) {
     this.resizeStrands(world.strandCount);
+    if (quality.mobile) for (let i = 0; i < this.meshes.length; i++)
+      this.meshes[i].castShadow = castsNoodleShadow(i, world.strandCount, true);
     world.getRenderHandle('left', oldPoint);
     this.grips.left.position.copy(oldPoint);
     world.getRenderHandle('right', oldPoint);
