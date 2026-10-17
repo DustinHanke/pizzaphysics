@@ -78,7 +78,7 @@ function createGripTexture() {
 }
 /** A severed constraint must also remove the corresponding tube wall;
  * the cut ends have their own small, rounded caps. */
-export function createTubeIndices(brokenAt: number | null) {
+export function createTubeIndices(brokenAt: number | null, connectedAtRight = false) {
   const count = (SEGMENTS + 1) * RADIAL;
   const indices: number[] = [];
   for (let i = 0; i < SEGMENTS; i++) {
@@ -90,8 +90,10 @@ export function createTubeIndices(brokenAt: number | null) {
   }
   for (let j = 0; j < RADIAL; j++) {
     indices.push(count, (j + 1) % RADIAL, j);
+    // Folded ends are joined to the curved loop: an artificial dough cap
+    // here would appear as a plug inside the continuous turning material.
     const last = SEGMENTS * RADIAL;
-    indices.push(count + 1, last + j, last + (j + 1) % RADIAL);
+    if (!connectedAtRight) indices.push(count + 1, last + j, last + (j + 1) % RADIAL);
     if (brokenAt !== null) {
       const a = brokenAt * RADIAL;
       const b = (brokenAt + 1) * RADIAL;
@@ -219,9 +221,12 @@ export class NoodleRenderer {
     for (let strandIndex = 0; strandIndex < world.strands.length; strandIndex++) {
       const geometry = this.meshes[strandIndex].geometry;
       const brokenAt = world.strands[strandIndex].brokenAt;
-      if ((geometry.userData.brokenAt ?? null) !== brokenAt) {
-        geometry.setIndex(createTubeIndices(brokenAt));
+      const connectedAtRight = world.strandCount > 1;
+      if ((geometry.userData.brokenAt ?? null) !== brokenAt
+        || (geometry.userData.connectedAtRight ?? false) !== connectedAtRight) {
+        geometry.setIndex(createTubeIndices(brokenAt, connectedAtRight));
         geometry.userData.brokenAt = brokenAt;
+        geometry.userData.connectedAtRight = connectedAtRight;
       }
       const positions = (geometry.getAttribute('position') as T.BufferAttribute).array as Float32Array;
       const normals = (geometry.getAttribute('normal') as T.BufferAttribute).array as Float32Array;
