@@ -163,3 +163,90 @@
 }
 .noodle-experiment .noodle-tear strong { display: block; font: 22px Georgia, serif; font-weight: normal; }
 .noodle-experiment .noodle-tear p { margin: 7px 0 0; font-size: 11px; line-height: 1.6; }
+
+/* V8: progressive peripheral stress awareness. The vignette has no hit area
+ * and never interferes with pointer capture or two-finger pulling. */
+.noodle-experiment .stress-vignette {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: 3;
+  pointer-events: none;
+  opacity: var(--stress-intensity, 0);
+  background: radial-gradient(
+    ellipse at center,
+    transparent 25%,
+    rgba(var(--stress-rgb, 242, 189, 51), .05) 44%,
+    rgba(var(--stress-rgb, 242, 189, 51), .30) 75%,
+    rgba(var(--stress-rgb, 242, 189, 51), .76) 100%
+  );
+  box-shadow: inset 0 0 84px 15px rgba(var(--stress-rgb, 242, 189, 51), .24);
+  transition: opacity 220ms ease, box-shadow 220ms ease;
+}
+.noodle-experiment .stress-vignette[data-level="critical"],
+.noodle-experiment .stress-vignette[data-level="broken"] {
+  --stress-rgb: 229, 70, 48;
+}
+.noodle-experiment .stress-callout {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  max-width: min(440px, calc(100% - 24px));
+  width: max-content;
+  padding: 9px 17px;
+  border-radius: 9px;
+  background: rgba(27, 21, 17, .85);
+  border: 1px solid rgba(255, 198, 85, .35);
+  color: #ffe4a6;
+  z-index: 4;
+  pointer-events: none;
+  text-align: center;
+  box-shadow: 0 5px 20px #130e0b55;
+}
+.noodle-experiment .stress-callout[hidden] { display: none; }
+.noodle-experiment .stress-callout[data-level="critical"],
+.noodle-experiment .stress-callout[data-level="broken"] {
+  border-color: rgba(255, 120, 96, .5);
+  color: #ffd0c7;
+}
+.noodle-experiment .stress-callout span {
+  display: block;
+  font: 700 11px/1.4 var(--mono);
+  letter-spacing: .1em;
+}
+.noodle-experiment .stress-callout small {
+  display: block;
+  margin-top: 2px;
+  font: 10px/1.5 var(--mono);
+  letter-spacing: .01em;
+}
+.noodle-experiment .noodle-haptics-setting {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  font: 11px/1.6 var(--mono);
+  color: #655a4c;
+  letter-spacing: normal;
+  cursor: pointer;
+}
+.noodle-experiment .noodle-haptics-setting[hidden] { display: none; }
+.noodle-experiment .noodle-haptics-setting input {
+  accent-color: #ad693c;
+  width: 16px; height: 16px;
+  flex: 0 0 auto;
+}
+.noodle-experiment .noodle-haptics-setting span { color: #978b7c; }
+@media (max-width: 480px) {
+  .noodle-experiment .stress-callout {
+    bottom: 12px;
+    padding: 8px 12px;
+  }
+  .noodle-experiment .stress-callout span { font-size: 10px; }
+  .noodle-experiment .stress-callout small { font-size: 9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .noodle-experiment .stress-vignette { transition: none; }
+}
