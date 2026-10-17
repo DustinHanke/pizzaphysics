@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import * as T from 'three';
 import { NoodleWorld } from '../src/noodles/NoodleWorld';
-import { castsNoodleShadow } from '../src/noodles/NoodleRenderer';
+import { castsNoodleShadow, noodleRadialSegments } from '../src/noodles/NoodleRenderer';
 
 // Non-gating CPU benchmark. Real-world FPS also depends on GPU, screen
 // resolution, browser backend and shadow rendering.
@@ -29,6 +29,8 @@ function measure(strandCount: number) {
   assert(world.strands.every(s => s.points.every(p => Number.isFinite(p.lengthSq()))));
   return { msPerStep: Number(msPerStep.toFixed(3)), contacts: world.contacts };
 }
+assert.equal(noodleRadialSegments(true), 12, 'touch devices use lower vertex detail');
+assert.equal(noodleRadialSegments(false), 16, 'desktop keeps full radial resolution');
 // At sixteen strands, keep all geometry visible but submit only four
 // tube shadows plus no loop shadows on a touch-focused mobile GPU.
 assert.equal(Array.from({length:16}, (_,i)=>castsNoodleShadow(i,16,true))
