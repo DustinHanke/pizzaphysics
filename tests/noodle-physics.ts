@@ -71,6 +71,9 @@ for (let n = 0; n < 3; n++) {
 }
 assert.equal(world.strandCount, 16);
 assert.equal(world.fold(), false, 'limit the detailed prototype to sixteen strands');
+for (let i = 0; i < 120; i++) world.step(1 / 120);
+assert.equal(world.folding, false);
+assert.equal(world.batchReady, true, 'a sufficiently even sixteen-strand pull must reach the finish state');
 assert(world.uniformity >= 0 && world.uniformity <= 100, 'pull quality must be bounded');
 assert(Number.isFinite(world.minDiameterMm) && world.minDiameterMm > 0);
 console.log('LAMIAN_16_STRAND_SAMPLE', JSON.stringify({
