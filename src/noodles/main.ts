@@ -15,15 +15,22 @@ async function start() {
   const canvas = document.querySelector('#scene') as HTMLCanvasElement;
   const { scene, camera, renderer, resolution, key } = await createScene(canvas);
   const noodles = new NoodleRenderer(scene);
+  // A restrained raking fill emphasizes the PBR normal map's flour and creases
+  // without changing the shared Pizza Physics lighting implementation.
+  const doughFill = new T.DirectionalLight('#fff9ec', .27);
+  doughFill.position.set(1.5, 5.5, 4);
+  scene.add(doughFill);
   const hint = document.querySelector('#hint')!;
   const controller = new NoodleInteraction(canvas, camera, world, noodles.grips,
     () => hint.classList.add('hidden'),
-    () => { if (world.fold()) { noodles.update(world); hint.classList.add('hidden'); } });
+    () => { if (world.fold()) { noodles.update(world); hint.classList.add('hidden'); } },
+    (side, active) => noodles.setGripHover(side, active));
   const reset = () => {
     controller.release();
     world.reset();
     noodles.update(world);
     hint.classList.remove('hidden');
+    noodles.setGripHover(null);
   };
   const fold = () => {
     controller.release();
