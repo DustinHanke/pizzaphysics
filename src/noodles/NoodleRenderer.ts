@@ -248,9 +248,12 @@ export class NoodleRenderer {
       const link = this.strainLinks[side];
       ghost.visible = link.visible = show;
       if (show) {
-        ghost.position.copy(side === 'left' ? world.leftTarget : world.rightTarget);
-        const vertices = (link.geometry.getAttribute('position') as T.BufferAttribute).array as Float32Array;
         const grip = this.grips[side].position;
+        const fingertip = side === 'left' ? world.leftTarget : world.rightTarget;
+        // A restrained strain cue stays close to the dough. A full-length
+        // line to an off-screen finger reads as a rubber band, not heavy dough.
+        ghost.position.copy(fingertip).sub(grip).multiplyScalar(Math.min(1, .70 / lag)).add(grip);
+        const vertices = (link.geometry.getAttribute('position') as T.BufferAttribute).array as Float32Array;
         vertices[0] = grip.x; vertices[1] = grip.y; vertices[2] = grip.z;
         vertices[3] = ghost.position.x; vertices[4] = ghost.position.y; vertices[5] = ghost.position.z;
         link.geometry.attributes.position.needsUpdate = true;
