@@ -17,6 +17,7 @@ export interface NoodleSettings {
   plasticity: number;
   softness: number;
   gravity: number;
+  resistance: number;
 }
 
 const SEGMENTS = 32;
@@ -35,7 +36,7 @@ export class NoodleWorld {
   readonly fixedDt = 1 / 120;
   accumulator = 0;
   timeMs = 0;
-  settings: NoodleSettings = { plasticity: 65, softness: 48, gravity: 65 };
+  settings: NoodleSettings = { plasticity: 65, softness: 48, gravity: 65, resistance: 72 };
   readonly left = new T.Vector3(-1.48, 1.55, 0);
   readonly right = new T.Vector3(1.48, 1.55, 0);
   readonly leftTarget = this.left.clone();
@@ -310,9 +311,9 @@ export class NoodleWorld {
     const blend = 1 - Math.exp(-dt * 24);
     leftMotion.copy(this.left);
     rightMotion.copy(this.right);
-    if (this.held.left) advanceResistantGrip(this.left, this.leftTarget, this.right, dt, this.materialLength, true);
+    if (this.held.left) advanceResistantGrip(this.left, this.leftTarget, this.right, dt, this.materialLength, true, this.settings.resistance);
     else if (!this.touched.left) this.left.lerp(this.leftTarget, blend);
-    if (this.held.right) advanceResistantGrip(this.right, this.rightTarget, this.left, dt, this.materialLength, true);
+    if (this.held.right) advanceResistantGrip(this.right, this.rightTarget, this.left, dt, this.materialLength, true, this.settings.resistance);
     else if (!this.touched.right) this.right.lerp(this.rightTarget, blend);
     leftMotion.subVectors(this.left, leftMotion).clampLength(0, .09);
     rightMotion.subVectors(this.right, rightMotion).clampLength(0, .09);
