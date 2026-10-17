@@ -255,3 +255,9 @@
  * competes with the yellow/red imminent-tear vignette. */
 .noodle-experiment .noodle-resistance { margin-top: 10px; }
 .noodle-experiment .noodle-resistance .track { background: #e2daca; }
+
+/* V10: pale green softening bar communicates the material's transient
+ * relaxation without falsely implying that its permanent strength recovers. */
+.noodle-experiment .noodle-relaxation { margin-top: 10px; }
+.noodle-experiment .noodle-relaxation .track { background: #e3e4d9; }
+.noodle-experiment .noodle-relaxation .track i { background: #8c9b79; }
