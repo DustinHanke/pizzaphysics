@@ -250,3 +250,8 @@
 @media (prefers-reduced-motion: reduce) {
   .noodle-experiment .stress-vignette { transition: none; }
 }
+
+/* V9: physical drag, distinct from damage. Warm and restrained so it never
+ * competes with the yellow/red imminent-tear vignette. */
+.noodle-experiment .noodle-resistance { margin-top: 10px; }
+.noodle-experiment .noodle-resistance .track { background: #e2daca; }
