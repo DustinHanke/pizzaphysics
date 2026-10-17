@@ -85,6 +85,14 @@ export class NoodleWorld {
         point.y -= sag * Math.sin(Math.PI * t);
         point.y += offset * Math.sin(Math.PI * t);
         point.z += offset * .26 * Math.sin(Math.PI * t);
+        if (count > 1) {
+          // Match the paired end anchors on the very first fold frame too.
+          const pairIndex = Math.floor(strand / 2) - (Math.ceil(count / 2) - 1) * .5;
+          const side = strand % 2 === 0 ? -1 : 1;
+          const radius = this.radius;
+          point.z += pairIndex * radius * 2.75
+            + side * radius * ((1 - t) * .63 + t * 1.35);
+        }
         points.push(point);
         previous.push(point.clone());
       }
