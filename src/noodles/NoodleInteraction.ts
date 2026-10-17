@@ -5,7 +5,10 @@ type Side = 'left' | 'right';
 interface Drag {
   side: Side;
   plane: T.Plane;
-  offset: T.Vector3;
+  /** The fingertip ray intersection when the gesture began. */
+  initialHit: T.Vector3;
+  initialTarget: T.Vector3;
+  gain: number;
 }
 
 /** Independent Pointer Events for both dough ends. Capturing each pointer ID
@@ -103,8 +106,15 @@ export class NoodleInteraction {
       this.camera.getWorldDirection(this.view);
       const anchor = this.grips[side].position;
       const plane = new T.Plane().setFromNormalAndCoplanarPoint(this.view, anchor);
-      this.ray.ray.closestPointToPoint(anchor, this.hit);
-      this.drags.set(e.pointerId, { side, plane, offset: anchor.clone().sub(this.hit) });
+      if (!this.ray.ray.intersectPlane(plane, this.hit)) return;
+      // Mobile glass offers only a few centimeters of usable travel before
+      // the fingers reach the screen edges. Scale that gesture into the
+      // wider physical bench, without altering mouse precision.
+      const gain = e.pointerType === 'touch' ? 1.72 : 1;
+      this.drags.set(e.pointerId, {
+        side, plane, initialHit: this.hit.clone(),
+        initialTarget: anchor.clone(), gain,
+      });
       this.owners.set(side, e.pointerId);
       this.world.setGripHeld(side, true);
       this.hover = null;
@@ -133,7 +143,9 @@ export class NoodleInteraction {
     if (drag) {
       this.cast(e);
       if (this.ray.ray.intersectPlane(drag.plane, this.hit)) {
-        this.world.moveHandle(drag.side, this.hit.add(drag.offset));
+        const target = this.hit.sub(drag.initialHit)
+          .multiplyScalar(drag.gain).add(drag.initialTarget);
+        this.world.moveHandle(drag.side, target);
         // A real pointer gesture offers the best chance of permission to
         // trigger navigator.vibrate on platforms that support it.
         this.onDoughGesture?.();
@@ -235,10 +247,15 @@ export class NoodleInteraction {
     this.orbitYaw = T.MathUtils.lerp(this.orbitYaw, this.desiredYaw, blend);
     this.orbitPitch = T.MathUtils.lerp(this.orbitPitch, this.desiredPitch, blend);
     this.distance = T.MathUtils.lerp(this.distance, this.desiredDistance, blend);
-    const span = this.world.left.distanceTo(this.world.right);
+    const span = Math.max(
+      this.world.left.distanceTo(this.world.right),
+      this.camera.aspect < 1.2
+        ? this.world.leftTarget.distanceTo(this.world.rightTarget) * .77
+        : this.world.left.distanceTo(this.world.right),
+    );
     const follow = .5 * (this.world.left.y + this.world.right.y);
     this.target.y = T.MathUtils.lerp(this.target.y, T.MathUtils.clamp(follow - .34, 1.13, 2.4), blend * (this.drags.size ? .10 : .25));
-    const fitDistance = span * 1.20 / (2 * Math.tan(35 * Math.PI / 360) * Math.max(.56, this.camera.aspect));
+    const fitDistance = span * 1.16 / (2 * Math.tan(35 * Math.PI / 360) * Math.max(.56, this.camera.aspect));
     const framing = Math.max(0, (span - 5.2) * .48);
     this.cameraOffset.setFromSphericalCoords(Math.max(this.distance + framing, fitDistance), this.orbitPitch, this.orbitYaw);
     this.desiredCameraPosition.copy(this.target).add(this.cameraOffset);
