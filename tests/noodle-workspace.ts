@@ -30,6 +30,8 @@ for (let cycle = 0; cycle < 5 && !world.torn; cycle++) {
     world.step(dt);
     if (i === 2) xs.push(world.failureRisk);
   }
+  if (cycle === 0) assert(!world.torn,
+    'a single extreme yank should warn and weaken, not immediately destroy the dough');
 }
 console.log('WIDE_TWO_HAND_TEAR', JSON.stringify({
   torn: world.torn, risks: xs.map(x => +x.toFixed(3)),
