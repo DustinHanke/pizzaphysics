@@ -56,7 +56,7 @@ async function start() {
     if (e.code === 'KeyC') controller.resetView();
   });
 
-  const fields = Object.fromEntries(['length', 'strands', 'thickness', 'stretch', 'tension', 'tension-bar', 'uniformity', 'uniformity-bar', 'status', 'fps', 'physics'].map(id => [id, document.getElementById(id)!]));
+  const fields = Object.fromEntries(['length', 'strands', 'thickness', 'stretch', 'tension', 'tension-bar', 'uniformity', 'uniformity-bar', 'success', 'status', 'fps', 'physics'].map(id => [id, document.getElementById(id)!]));
   let previous = performance.now(), lastUI = 0, lastShadow = 0, frames = 0, elapsed = 0, smoothedPhysics = 0;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -90,6 +90,7 @@ async function start() {
       fields['tension-bar'].style.width = `${world.tension}%`;
       fields['tension-bar'].style.background = world.tension > 78 ? '#b94d2c' : '#777e5c';
       document.querySelector('#fold')!.classList.toggle('ready', world.canFold);
+      fields.success.hidden = !world.batchReady;
       fields.status.textContent = world.folding
         ? 'FOLDING — KEEP YOUR HANDS STEADY'
         : world.batchReady
