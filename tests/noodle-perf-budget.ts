@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import * as T from 'three';
 import { NoodleWorld } from '../src/noodles/NoodleWorld';
+import { castsNoodleShadow } from '../src/noodles/NoodleRenderer';
 
 // Non-gating CPU benchmark. Real-world FPS also depends on GPU, screen
 // resolution, browser backend and shadow rendering.
@@ -28,6 +29,14 @@ function measure(strandCount: number) {
   assert(world.strands.every(s => s.points.every(p => Number.isFinite(p.lengthSq()))));
   return { msPerStep: Number(msPerStep.toFixed(3)), contacts: world.contacts };
 }
+// At sixteen strands, keep all geometry visible but submit only four
+// tube shadows plus no loop shadows on a touch-focused mobile GPU.
+assert.equal(Array.from({length:16}, (_,i)=>castsNoodleShadow(i,16,true))
+  .filter(Boolean).length,4);
+assert(Array.from({length:16}, (_,i)=>castsNoodleShadow(i,16,false))
+  .every(Boolean), 'desktop retains full shadows');
+assert(Array.from({length:4}, (_,i)=>castsNoodleShadow(i,4,true))
+  .every(Boolean), 'early mobile pulling keeps the original shadows');
 console.log('NOODLE_PHYSICS_CPU_MS', JSON.stringify({
   single: measure(1),
   eight: measure(8),
