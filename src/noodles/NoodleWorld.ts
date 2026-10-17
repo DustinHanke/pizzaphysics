@@ -316,7 +316,10 @@ export class NoodleWorld {
     }
     const blend = 1 - Math.exp(-dt * 24);
     const gripping = this.held.left || this.held.right;
-    this.rheology.update(dt, this.leftTarget, this.rightTarget, gripping && this.resistance > .025);
+    // Tension remains even when the dough catches up to the hand. Continue
+    // accumulating relaxation during a sustained hold on an extended rope.
+    const loadedHold = gripping && (this.resistance > .015 || this.tension > 28);
+    this.rheology.update(dt, this.leftTarget, this.rightTarget, loadedHold);
     const relaxed = this.rheology.relaxed;
     leftMotion.copy(this.left);
     rightMotion.copy(this.right);
