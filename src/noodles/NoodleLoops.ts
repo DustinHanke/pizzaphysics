@@ -5,7 +5,12 @@ const RADIAL = 12;
 const STEPS = 10;
 const START = new T.Vector3();
 const END = new T.Vector3();
-const MID = new T.Vector3();
+const C1 = new T.Vector3();
+const C2 = new T.Vector3();
+const D1 = new T.Vector3();
+const D2 = new T.Vector3();
+const TMP1 = new T.Vector3();
+const TMP2 = new T.Vector3();
 const P = new T.Vector3();
 const Q = new T.Vector3();
 const tangent = new T.Vector3();
@@ -61,21 +66,33 @@ export class NoodleLoops {
       if (!mesh.visible) continue;
       world.getRenderPoint(k * 2, 32, START);
       world.getRenderPoint(k * 2 + 1, 32, END);
-      MID.copy(START).add(END).multiplyScalar(.5);
-      MID.x += Math.max(.18, world.radius * 2.3);
-      // A stable tiny z offset keeps repeated folds spatially distinguishable.
-      MID.z += (k - (count - 1) * .5) * .025;
+      // Match the directions of both incoming strands. A cubic bend
+      // avoids the sharp tube-to-loop junction of the former quadratic arch.
+      world.getRenderPoint(k * 2, 31, D1);
+      D1.subVectors(START, D1).normalize();
+      world.getRenderPoint(k * 2 + 1, 31, D2);
+      D2.subVectors(END, D2).normalize();
+      const reach = Math.max(.15, START.distanceTo(END) * .55, world.radius * 2.2);
+      // Both tangents point out of the strand endpoints into the same fold.
+      // Favor the outer (+X) bend on extreme collisions rather than turning inward.
+      D1.x = Math.max(.26, D1.x);
+      D2.x = Math.max(.26, D2.x);
+      D1.normalize(); D2.normalize();
+      C1.copy(START).addScaledVector(D1, reach);
+      C2.copy(END).addScaledVector(D2, reach);
       const g = mesh.geometry;
       const positions = (g.getAttribute('position') as T.BufferAttribute).array as Float32Array;
       const normals = (g.getAttribute('normal') as T.BufferAttribute).array as Float32Array;
-      const radius = world.radius * 1.1;
+      const radius = (world.getLocalRadius(k * 2, 1) + world.getLocalRadius(k * 2 + 1, 1)) * .59;
       for (let i = 0; i <= STEPS; i++) {
         const t = i / STEPS, a = 1 - t;
-        P.copy(START).multiplyScalar(a * a)
-          .addScaledVector(MID, 2 * a * t)
-          .addScaledVector(END, t * t);
-        tangent.copy(MID).sub(START).multiplyScalar(2 * a)
-          .addScaledVector(Q.copy(END).sub(MID), 2 * t);
+        P.copy(START).multiplyScalar(a * a * a)
+          .addScaledVector(C1, 3 * a * a * t)
+          .addScaledVector(C2, 3 * a * t * t)
+          .addScaledVector(END, t * t * t);
+        tangent.copy(Q.subVectors(C1, START)).multiplyScalar(3 * a * a)
+          .addScaledVector(TMP1.subVectors(C2, C1), 6 * a * t)
+          .addScaledVector(TMP2.subVectors(END, C2), 3 * t * t);
         if (tangent.lengthSq() < 1e-8) tangent.set(1, 0, 0);
         tangent.normalize();
         normal.crossVectors(tangent, up);
