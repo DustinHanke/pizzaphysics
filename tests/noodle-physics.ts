@@ -71,6 +71,15 @@ for (let n = 0; n < 3; n++) {
 }
 assert.equal(world.strandCount, 16);
 assert.equal(world.fold(), false, 'limit the detailed prototype to sixteen strands');
+assert(world.uniformity >= 0 && world.uniformity <= 100, 'pull quality must be bounded');
+assert(Number.isFinite(world.minDiameterMm) && world.minDiameterMm > 0);
+console.log('LAMIAN_16_STRAND_SAMPLE', JSON.stringify({
+  diameterMm: Number(world.diameterMm.toFixed(2)),
+  minDiameterMm: Number(world.minDiameterMm.toFixed(2)),
+  uniformity: world.uniformity,
+  completed: world.batchReady,
+  totalLengthCm: Number((world.totalLength * 10).toFixed(1)),
+}));
 
 world.reset();
 const centerZ = world.strands[0].points[16].z;
