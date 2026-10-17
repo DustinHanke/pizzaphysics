@@ -4,7 +4,14 @@ import {ResolutionBudget} from '../performance/ResolutionBudget';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 const studioEnvironmentUrl=new URL('../assets/pizza-studio-environment.hdr',import.meta.url).href;
-export async function createScene(canvas:HTMLCanvasElement){
+/** Optional tuning for more expensive standalone scenes. Pizza Physics
+ * retains identical defaults when no overrides are supplied. */
+export interface ScenePerformanceOptions {
+ mobileMaxPixelRatio?: number;
+ mobileMinPixelRatio?: number;
+ mobileShadowMapSize?: number;
+}
+export async function createScene(canvas:HTMLCanvasElement,opts:ScenePerformanceOptions={}){
  // Dark, warm studio field follows the food-photography reference while the
  // editorial interface surrounding the viewport remains unchanged.
  const scene=new T.Scene();scene.background=new T.Color('#171513');scene.fog=new T.Fog('#171513',22,48);
@@ -14,7 +21,9 @@ export async function createScene(canvas:HTMLCanvasElement){
   try{const {WebGPURenderer}=await import('three/webgpu');renderer=new WebGPURenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});await renderer.init();backend=renderer.backend?.isWebGPUBackend?'WebGPU':'WebGL 2';}catch{renderer?.dispose();renderer=null;}
  }
  if(!renderer)renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});
- const resolution=new ResolutionBudget(Math.min(devicePixelRatio,quality.mobile?1.5:1.75),Math.min(devicePixelRatio,quality.mobile?1.25:1));
+ const maxRatio=Math.min(devicePixelRatio,quality.mobile?(opts.mobileMaxPixelRatio??1.5):1.75);
+ const minRatio=Math.min(maxRatio,devicePixelRatio,quality.mobile?(opts.mobileMinPixelRatio??1.25):1);
+ const resolution=new ResolutionBudget(maxRatio,minRatio);
  renderer.setPixelRatio(resolution.ratio);renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=.86;renderer.outputColorSpace=T.SRGBColorSpace;
  const environment=new RoomEnvironment();
  try{
@@ -34,7 +43,7 @@ export async function createScene(canvas:HTMLCanvasElement){
  // Three-point food-photography rig: a lower side key defines the crust,
  // a restrained opposite fill preserves shadow color, and a warm rear rim
  // picks up dough translucency and mozzarella edges without flattening the top.
- const key=new T.DirectionalLight('#fff0dc',1.75);key.position.set(-4.5,3.8,3.5);key.castShadow=true;key.shadow.autoUpdate=false;key.shadow.needsUpdate=true;key.shadow.mapSize.set(quality.mobile?1024:2048,quality.mobile?1024:2048);key.shadow.camera.left=-6;key.shadow.camera.right=6;key.shadow.camera.top=6;key.shadow.camera.bottom=-6;key.shadow.normalBias=.009;key.shadow.bias=-.0002;key.shadow.radius=6;scene.add(key);
+ const key=new T.DirectionalLight('#fff0dc',1.75);key.position.set(-4.5,3.8,3.5);key.castShadow=true;key.shadow.autoUpdate=false;key.shadow.needsUpdate=true;key.shadow.mapSize.set(quality.mobile?(opts.mobileShadowMapSize??1024):2048,quality.mobile?(opts.mobileShadowMapSize??1024):2048);key.shadow.camera.left=-6;key.shadow.camera.right=6;key.shadow.camera.top=6;key.shadow.camera.bottom=-6;key.shadow.normalBias=.009;key.shadow.bias=-.0002;key.shadow.radius=6;scene.add(key);
  const fill=new T.DirectionalLight('#e7d9c6',.30);fill.position.set(5,2.6,1.5);scene.add(fill);
  const rim=new T.DirectionalLight('#ffc477',1.05);rim.position.set(-3.5,2.0,-5);scene.add(rim);
  const floor=new T.Mesh(new T.PlaneGeometry(150,150),new T.MeshStandardMaterial({color:'#25211d',roughness:1}));floor.rotation.x=-Math.PI/2;floor.position.y=.001;floor.receiveShadow=true;scene.add(floor);
