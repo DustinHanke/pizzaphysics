@@ -1,5 +1,6 @@
 import * as T from 'three';
 import { advanceResistantGrip } from './PullDynamics';
+import { DoughRheology } from './DoughRheology';
 
 /** A strand is a small, fixed-budget XPBD chain. Rest lengths grow under tension
  * (plastic flow), rather than springing back like melted cheese. */
@@ -42,6 +43,9 @@ export class NoodleWorld {
   readonly leftTarget = this.left.clone();
   readonly rightTarget = this.right.clone();
   private readonly held: Record<'left' | 'right', boolean> = { left: false, right: false };
+  private readonly rheology = new DoughRheology();
+  get relaxation() { return this.rheology.relaxed; }
+  get pullSpeed() { return this.rheology.motionSpeed; }
   private readonly touched: Record<'left' | 'right', boolean> = { left: false, right: false };
   /** Finger displacement while gluten resists: zero once the finger lifts. */
   get resistance() {
@@ -177,6 +181,7 @@ export class NoodleWorld {
     this.transition = null;
     this.contacts = 0;
     this.transientLoad = 0;
+    this.rheology.reset();
     this.held.left = this.held.right = false;
     this.touched.left = this.touched.right = false;
     this.createStrands(1, INITIAL_LENGTH);
@@ -276,6 +281,7 @@ export class NoodleWorld {
     this.rightTarget.copy(this.right);
     this.held.left = this.held.right = false;
     this.touched.left = this.touched.right = false;
+    this.rheology.reset();
     this.createStrands(this.strandCount * 2, length);
     // Each original strand bends back on itself: the two halves travel together
     // into the doubled arrangement rather than teleporting into parallel tubes.
@@ -309,9 +315,12 @@ export class NoodleWorld {
       if (this.transition.elapsed >= this.transition.duration) this.transition = null;
     }
     const blend = 1 - Math.exp(-dt * 24);
+    const gripping = this.held.left || this.held.right;
+    this.rheology.update(dt, this.leftTarget, this.rightTarget, gripping && this.resistance > .025);
+    const relaxed = this.rheology.relaxed;
     leftMotion.copy(this.left);
     rightMotion.copy(this.right);
-    if (this.held.left) advanceResistantGrip(this.left, this.leftTarget, this.right, dt, this.materialLength, true, this.settings.resistance);
+    if (this.held.left) advanceResistantGrip(this.left, this.leftTarget, this.right, dt, this.materialLength, true, this.settings.resistance, relaxed);
     else if (!this.touched.left) this.left.lerp(this.leftTarget, blend);
     if (this.held.right) advanceResistantGrip(this.right, this.rightTarget, this.left, dt, this.materialLength, true, this.settings.resistance);
     else if (!this.touched.right) this.right.lerp(this.rightTarget, blend);
@@ -320,7 +329,12 @@ export class NoodleWorld {
     const span = this.left.distanceTo(this.right);
     const gravity = 3 + this.settings.gravity * .085;
     const radiusAtStart = this.radius;
-    const violentMotion = T.MathUtils.clamp((leftMotion.length() + rightMotion.length() - .042) / .105, 0, 1);
+    // Deliberate fast finger movement transmits a shock through the
+    // hand-to-dough coupling even before the heavy grip has caught up.
+    const violentMotion = Math.max(
+      T.MathUtils.clamp((leftMotion.length() + rightMotion.length() - .042) / .105, 0, 1),
+      this.rheology.shockLoad * .65,
+    );
     // Less damping preserves hand-driven follow-through after a release.
     const damping = Math.exp(-dt * (.62 + (100 - this.settings.softness) * .010));
     this.contacts = 0;
@@ -334,7 +348,8 @@ export class NoodleWorld {
       const currentLength = rest.reduce((sum, value) => sum + value, 0);
       const desired = span / .975;
       if (desired > currentLength && strand.brokenAt === null) {
-        const growth = Math.min(.035, (desired / currentLength - 1) * dt * (2.1 + this.settings.plasticity * .14));
+        const growth = Math.min(.035, (desired / currentLength - 1) * dt
+          * (2.1 + this.settings.plasticity * .14) * (1 + relaxed * .60));
         let totalWeight = 0;
         for (let i = 0; i < SEGMENTS; i++) {
           // Local tension and small deterministic variations make the yield
