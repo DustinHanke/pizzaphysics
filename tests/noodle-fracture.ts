@@ -46,7 +46,7 @@ assert.equal(stressed.integrity, 100);
 const intact = createTubeIndices(null);
 const torn = createTubeIndices(weakSpot);
 assert.equal(intact.length, (32 * 16 * 2 + 2 * 16) * 3);
-assert.equal(torn.length, intact.length + 16 * 3, 'one removed span, two added cut caps');
+assert.equal(torn.length, intact.length, 'one removed wall strip is replaced by two cut caps');
 const bridgeLeft = weakSpot * 16;
 const bridgeRight = (weakSpot + 1) * 16;
 for (let i = 0; i < torn.length; i += 3) {
