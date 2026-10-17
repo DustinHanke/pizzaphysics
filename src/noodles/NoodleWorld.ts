@@ -213,7 +213,7 @@ export class NoodleWorld {
   /** Local cross-section responds to both accumulated plastic flow and
    * elastic stretch. The global radius conserves approximate total volume;
    * this correction distributes that volume along unevenly yielded dough. */
-  getLocalRadius(strandIndex: number, t: number) {
+  getLocalRadius(strandIndex: number, t: number, baseRadius?: number, meanRest?: number, localDamage?: number) {
     const strand = this.strands[strandIndex];
     if (!strand) return this.radius;
     const location = T.MathUtils.clamp(t, 0, 1) * SEGMENTS;
@@ -224,16 +224,19 @@ export class NoodleWorld {
     const localRest = (before + 2 * center + after) * .25;
     // Only the local strand's rest distribution is needed here. Recomputing
     // the entire bundle for every tube ring becomes costly at 16 strands.
-    let strandRestTotal = 0;
-    for (let j = 0; j < SEGMENTS; j++) strandRestTotal += strand.rest[j];
-    const averageRest = strandRestTotal / SEGMENTS;
+    let averageRest = meanRest;
+    if (averageRest === undefined) {
+      let strandRestTotal = 0;
+      for (let j = 0; j < SEGMENTS; j++) strandRestTotal += strand.rest[j];
+      averageRest = strandRestTotal / SEGMENTS;
+    }
     const p = strand.points[i], q = strand.points[i + 1];
     const current = p.distanceTo(q);
     // Blend local strain into the profile without amplifying contact jitter.
     const elastic = T.MathUtils.clamp(current / Math.max(1e-6, center), .85, 1.38);
     const relative = T.MathUtils.clamp(averageRest / Math.max(1e-6, localRest), .45, 1.8);
-    const neck = 1 - this.getLocalDamage(strandIndex, t) * .55;
-    return this.radius * T.MathUtils.clamp(Math.sqrt(relative / Math.sqrt(elastic)), .66, 1.28) * neck;
+    const neck = 1 - (localDamage ?? this.getLocalDamage(strandIndex, t)) * .55;
+    return (baseRadius ?? this.radius) * T.MathUtils.clamp(Math.sqrt(relative / Math.sqrt(elastic)), .66, 1.28) * neck;
   }
   /** Calibrated to actual mesh units rather than a nominal unrendered diameter. */
   get diameterMm() { return this.radius * NOMINAL_SURFACE_RADIUS * NOODLE_CM_PER_UNIT * 20; }
