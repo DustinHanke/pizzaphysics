@@ -256,9 +256,12 @@ export class NoodleRenderer {
         const slowWaves = .095 * Math.sin(t * 7.7 + strandIndex * .62)
           + .066 * Math.sin(t * 18.9 + 1.1 + strandIndex * .19)
           + .033 * Math.sin(t * 41.3 + 2.6);
+        const localDamage = world.getLocalDamage(strandIndex, t);
         const localRadius = world.getLocalRadius(strandIndex, t);
         const radius = localRadius * 1.26 * (1 + shoulder + slowWaves) * rolledEnd;
-        const flatten = .86 + .14 * smoothstep(0, .13, distToTip);
+        // An overstretched gluten neck is asymmetric and less cylindrical.
+        // It visibly pinches before the constraint breaks.
+        const flatten = (.86 + .14 * smoothstep(0, .13, distToTip)) * (1 - localDamage * .23);
         // Approximate the meridian slope for round rather than flat end shading.
         const tipSlope = distToTip < .11 ? .63 * (1 - smoothstep(0, .11, distToTip)) * (t < .5 ? -1 : 1) : 0;
         for (let j = 0; j < RADIAL; j++) {
@@ -267,8 +270,10 @@ export class NoodleRenderer {
           const grainValue = grain(i * 13.17 + j * 1.339 + strandIndex * 71.1);
           const longitudinal = Math.sin(t * 32 + strandIndex * 3.1 + Math.sin(angle) * 2);
           // Striations follow the gluten and shallow flour-coated folds.
+          const wrinkle = Math.sin(angle * 2 + t * 59 + strandIndex * .7);
           const relief = 1 + .018 * longitudinal + .012 * (grainValue - .5)
-            + .008 * Math.sin(angle * 4 + t * 73 + strandIndex);
+            + .008 * Math.sin(angle * 4 + t * 73 + strandIndex)
+            + localDamage * .065 * wrinkle;
           const r = radius * relief;
           const index = (i * RADIAL + j) * 3;
           const nx = normal.x * c + binormal.x * s * flatten;
@@ -286,7 +291,8 @@ export class NoodleRenderer {
           const thickness = localRadius / Math.max(.01, world.radius);
           const stretchShade = T.MathUtils.clamp((1 - thickness) * .13, -.025, .05);
           const warmth = .975 + grainValue * .026 + flour - shoulder * .018
-            + .01 * Math.sin(angle * 3 + i * .43) - stretchShade;
+            + .01 * Math.sin(angle * 3 + i * .43) - stretchShade
+            - localDamage * .035;
           colors[index] = warmth;
           colors[index + 1] = warmth * .988;
           colors[index + 2] = warmth * .953;
