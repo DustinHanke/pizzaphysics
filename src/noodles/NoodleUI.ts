@@ -11,11 +11,11 @@ export function mountNoodleUI(settings: NoodleSettings) {
     </header>
     <section class="stage" aria-label="Hand-pulled noodle interaction">
       <div class="stage-caption"><span>LĀMIÀN / THE DOUGH STUDY · Nº 02</span><span>From a single pull.</span></div>
-      <canvas id="scene" tabindex="0" aria-label="Interactive strand of dough. Drag either dough grip to stretch. Drag empty space to orbit, scroll to zoom. Press F to fold and R to reset."></canvas>
-      <div class="pull-hint" id="hint"><span class="hint-mark" aria-hidden="true">↔</span><span>Pinch an end. Draw it out.</span></div>
+      <canvas id="scene" tabindex="0" aria-label="Interactive fresh noodle dough. Drag the highlighted ends to stretch. Drag empty space to orbit and scroll to zoom. Press S to swing, F to fold and R to reset."></canvas>
+      <div class="pull-hint" id="hint"><span class="hint-mark" aria-hidden="true">↔</span><span>Grab a glowing end. Gently draw it out.</span></div>
     </section>
     <div class="stage-actions">
-      <span class="gesture-note">Pull to stretch · Snap to swing · Bring ends together to fold</span>
+      <span class="gesture-note">Grab a marked tip to pull · Swing with S · Fold when ready</span>
       <div class="view-actions">
         <button id="camera-reset" title="Reset camera (C)">Reset view</button>
         <button id="snap" title="Snap the dough (S)">Swing <span aria-hidden="true">↝</span></button>
@@ -35,7 +35,7 @@ export function mountNoodleUI(settings: NoodleSettings) {
       <p id="status" role="status">DOUGH READY TO PULL</p>
     </section>
     <aside class="controls">
-      <div class="controls-intro"><span class="small-label">A STUDY IN HAND-PULLED DOUGH</span><h2>The perfect<br><em>pull.</em></h2><p>Pull the dough to thin it, then flick it to watch its weight and momentum. When it's long enough, fold it into connected strands and repeat.</p></div>
+      <div class="controls-intro"><span class="small-label">A STUDY IN HAND-PULLED DOUGH</span><h2>The perfect<br><em>pull.</em></h2><p>Every pull thins the dough unevenly. Move the ends and feel its weight settle; fold when the dough is long enough to double the strands.</p></div>
       <button class="controls-toggle" aria-expanded="true" aria-controls="control-body"><span>Adjust the feel</span><span class="toggle-symbol">−</span></button>
       <div id="control-body"></div>
       <p class="specimen-note">A little science. A lot of flour.<br><span>01 Pull · 02 Fold · 03 Repeat</span></p>
