@@ -33,6 +33,10 @@ async function start() {
     noodles.setGripState();
   };
   const fold = () => {
+    if (world.torn) {
+      document.querySelector('#status')!.textContent = 'THE DOUGH HAS SNAPPED — PRESS FRESH START';
+      return;
+    }
     controller.release();
     const didFold = world.fold();
     if (!didFold) {
@@ -56,7 +60,7 @@ async function start() {
     if (e.code === 'KeyC') controller.resetView();
   });
 
-  const fields = Object.fromEntries(['length', 'strands', 'thickness', 'stretch', 'tension', 'tension-bar', 'uniformity', 'uniformity-bar', 'success', 'status', 'fps', 'physics'].map(id => [id, document.getElementById(id)!]));
+  const fields = Object.fromEntries(['length', 'strands', 'thickness', 'stretch', 'tension', 'tension-bar', 'uniformity', 'uniformity-bar', 'strength', 'strength-bar', 'tear-notice', 'success', 'status', 'fps', 'physics'].map(id => [id, document.getElementById(id)!]));
   let previous = performance.now(), lastUI = 0, lastShadow = 0, frames = 0, elapsed = 0, smoothedPhysics = 0;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -87,11 +91,17 @@ async function start() {
       fields.uniformity.textContent = `${world.uniformity}%`;
       fields['uniformity-bar'].style.width = `${world.uniformity}%`;
       fields['uniformity-bar'].style.background = world.uniformity < 65 ? '#b94d2c' : '#718766';
+      fields.strength.textContent = `${world.integrity}%`;
+      fields['strength-bar'].style.width = `${world.integrity}%`;
+      fields['strength-bar'].style.background = world.integrity < 45 ? '#b94d2c' : '#718766';
+      fields['tear-notice'].hidden = !world.torn;
       fields['tension-bar'].style.width = `${world.tension}%`;
       fields['tension-bar'].style.background = world.tension > 78 ? '#b94d2c' : '#777e5c';
       document.querySelector('#fold')!.classList.toggle('ready', world.canFold);
       fields.success.hidden = !world.batchReady;
-      fields.status.textContent = world.folding
+      fields.status.textContent = world.torn
+        ? 'DOUGH TORN — TRY A MORE CONTROLLED PULL'
+        : world.folding
         ? 'FOLDING — KEEP YOUR HANDS STEADY'
         : world.batchReady
           ? 'BATCH COMPLETE — SIXTEEN EVENLY PULLED STRANDS'
