@@ -7,6 +7,17 @@ const initial = world.totalLength;
 assert.equal(world.strandCount, 1);
 assert(Math.abs(world.diameterMm - 9) < 1e-8);
 
+// Check local plastic thinning independently of global volume changes.
+// A locally yielded segment should be visibly narrower than its neighbours.
+const localWorld = new NoodleWorld();
+const initialMidRadius = localWorld.getLocalRadius(0, .5);
+assert(Number.isFinite(initialMidRadius) && initialMidRadius > 0);
+localWorld.strands[0].rest[16] *= 1.8;
+assert(localWorld.getLocalRadius(0, .5) < initialMidRadius * .94,
+  'local plastic extension must reduce the affected cross-section');
+assert(localWorld.getLocalRadius(0, .25) > localWorld.getLocalRadius(0, .5),
+  'the stretched middle must be thinner than neighbouring material');
+
 // Stretch both anchors in a deliberately slow, high-frequency interaction.
 for (let i = 0; i < 480; i++) {
   const x = 1.48 + i / 480 * 1.25;
@@ -16,6 +27,10 @@ for (let i = 0; i < 480; i++) {
 }
 assert(world.totalLength > initial * 1.12, 'dough must yield plastically during the pull');
 assert(world.diameterMm < 9, 'volume-conserving noodle must become thinner');
+for (let i = 0; i <= 32; i++) {
+  const r = world.getLocalRadius(0, i / 32);
+  assert(Number.isFinite(r) && r > 0 && r < .4, 'local radii must remain bounded when stretched');
+}
 for (const strand of world.strands) for (const p of strand.points) assert(Number.isFinite(p.lengthSq()));
 
 const volumeProxy = world.totalLength * world.radius ** 2;
