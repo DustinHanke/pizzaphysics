@@ -8,6 +8,8 @@ export interface NoodleStrand {
   rest: Float64Array;
   lambdas: Float64Array;
   yieldWeights: Float64Array;
+  damage: Float32Array;
+  brokenAt: number | null;
 }
 
 export interface NoodleSettings {
@@ -41,9 +43,23 @@ export class NoodleWorld {
   steps = 0;
   private lastFoldTotalLength = INITIAL_LENGTH;
   contacts = 0;
+  /** The first severed segment, or null while the rope remains intact. */
+  get tear() {
+    for (let k = 0; k < this.strands.length; k++) {
+      const brokenAt = this.strands[k].brokenAt;
+      if (brokenAt !== null) return { strand: k, segment: brokenAt };
+    }
+    return null;
+  }
+  get torn() { return this.tear !== null; }
+  get integrity() {
+    let peak = 0;
+    for (const strand of this.strands) for (const damage of strand.damage) peak = Math.max(peak, damage);
+    return this.torn ? 0 : Math.round(100 * (1 - T.MathUtils.clamp(peak, 0, 1)));
+  }
   /** Flick the center of the dough; Verlet velocities carry the motion. */
   snap() {
-    if (this.folding) return false;
+    if (this.folding || this.torn) return false;
     const amplitude = .065 + this.settings.softness * .0004;
     for (const [k, strand] of this.strands.entries()) for (let i = 1; i < SEGMENTS; i++) {
       const envelope = Math.sin(Math.PI * i / SEGMENTS);
@@ -102,6 +118,8 @@ export class NoodleWorld {
         rest: new Float64Array(SEGMENTS).fill(length / SEGMENTS),
         lambdas: new Float64Array(SEGMENTS),
         yieldWeights: new Float64Array(SEGMENTS),
+        damage: new Float32Array(SEGMENTS),
+        brokenAt: null,
       };
     });
   }
@@ -182,7 +200,7 @@ export class NoodleWorld {
     }
     return max > 0 ? Math.round(T.MathUtils.clamp(min / max, 0, 1) * 100) : 100;
   }
-  get batchReady() { return !this.folding && this.strandCount >= 16 && this.diameterMm <= 10 && this.uniformity >= 65; }
+  get batchReady() { return !this.folding && !this.torn && this.strandCount >= 16 && this.diameterMm <= 10 && this.uniformity >= 65; }
   get tension() {
     const span = this.left.distanceTo(this.right);
     return Math.round(T.MathUtils.clamp((span / Math.max(.01, this.materialLength) - .76) / .27, 0, 1) * 100);
@@ -190,7 +208,7 @@ export class NoodleWorld {
 
   /** A new fold requires additional extension since the previous fold. */
   get canFold() {
-    return !this.folding && this.strandCount < MAX_STRANDS && this.materialLength >= 2.55
+    return !this.folding && !this.torn && this.strandCount < MAX_STRANDS && this.materialLength >= 2.55
       && this.totalLength >= this.lastFoldTotalLength * 1.22;
   }
 
@@ -252,6 +270,7 @@ export class NoodleWorld {
     const span = this.left.distanceTo(this.right);
     const gravity = 3 + this.settings.gravity * .085;
     const radiusAtStart = this.radius;
+    const violentMotion = T.MathUtils.clamp((leftMotion.length() + rightMotion.length() - .042) / .105, 0, 1);
     // Less damping preserves hand-driven follow-through after a release.
     const damping = Math.exp(-dt * (.62 + (100 - this.settings.softness) * .010));
     this.contacts = 0;
@@ -263,7 +282,7 @@ export class NoodleWorld {
       // Bounding this growth per step prevents a single large drag from exploding.
       const currentLength = rest.reduce((sum, value) => sum + value, 0);
       const desired = span / .975;
-      if (desired > currentLength) {
+      if (desired > currentLength && strand.brokenAt === null) {
         const growth = Math.min(.035, (desired / currentLength - 1) * dt * (2.1 + this.settings.plasticity * .14));
         let totalWeight = 0;
         for (let i = 0; i < SEGMENTS; i++) {
@@ -295,6 +314,7 @@ export class NoodleWorld {
         this.anchorFor(strandIndex, 'left', points[0], radiusAtStart);
         this.anchorFor(strandIndex, 'right', points[SEGMENTS], radiusAtStart);
         for (let i = 0; i < SEGMENTS; i++) {
+          if (strand.brokenAt === i) continue;
           const a = points[i], b = points[i + 1];
           delta.copy(b).sub(a);
           const distance = delta.length();
@@ -311,7 +331,9 @@ export class NoodleWorld {
         const smooth = .013 * (1 - this.settings.softness / 140);
         for (let i = 1; i < SEGMENTS; i++) {
           tmp.copy(points[i - 1]).add(points[i + 1]).multiplyScalar(.5);
-          points[i].lerp(tmp, smooth);
+          if (strand.brokenAt === i || strand.brokenAt === i - 1) {
+            // Free, torn material ends must not be reconnected by bend smoothing.
+          } else points[i].lerp(tmp, smooth);
           if (points[i].y < .32 + this.radius * NOMINAL_SURFACE_RADIUS) {
             points[i].y = .32 + this.radius * NOMINAL_SURFACE_RADIUS;
             // Cancel the normal velocity rather than creating a fake bounce.
@@ -325,8 +347,34 @@ export class NoodleWorld {
       const creep = dt * (.18 + this.settings.plasticity * .021);
       for (let i = 0; i < SEGMENTS; i++) {
         const distance = points[i].distanceTo(points[i + 1]);
+        if (strand.brokenAt === i) continue;
         if (distance > rest[i] * 1.035) {
           rest[i] += Math.min(rest[i] * .006, (distance - rest[i]) * creep);
+        }
+      }
+      if (strand.brokenAt === null) {
+        // A sudden two-handed yank at high tension degrades the weakest
+        // interior section. Slow, controlled pulls continue to flow plastically.
+        const overload = T.MathUtils.clamp((span / Math.max(.01, currentLength) - .90) / .25, 0, 1);
+        const danger = violentMotion * overload;
+        for (let i = 4; i < SEGMENTS - 4; i++) {
+          const irregularity = Math.sin(i * 1.37 + strandIndex * 2.1) ** 2;
+          const susceptibility = .64 + irregularity * .36;
+          strand.damage[i] = Math.max(0, strand.damage[i] - dt * .045)
+            + danger * susceptibility * dt * 5.2;
+          if (strand.damage[i] >= 1) {
+            strand.brokenAt = i;
+            // Separate the disconnected endpoints immediately. Each half
+            // remains constrained to its own hand and falls freely at the cut.
+            delta.subVectors(points[i + 1], points[i]);
+            if (delta.lengthSq() < 1e-6) delta.set(1, 0, 0);
+            delta.normalize();
+            points[i].addScaledVector(delta, -.065);
+            points[i + 1].addScaledVector(delta, .065);
+            previous[i].copy(points[i]);
+            previous[i + 1].copy(points[i + 1]);
+            break;
+          }
         }
       }
       this.anchorFor(strandIndex, 'left', points[0], radiusAtStart);
