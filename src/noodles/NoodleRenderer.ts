@@ -166,12 +166,13 @@ export class NoodleRenderer {
     this.gripMarks = { left: hint(), right: hint() };
   }
 
-  setGripHover(side: 'left' | 'right' | null, active = false) {
+  setGripState(leftActive = false, rightActive = false, hovered: 'left' | 'right' | null = null) {
     for (const name of ['left', 'right'] as const) {
       const sprite = this.gripMarks[name];
       const material = sprite.material as T.SpriteMaterial;
-      material.opacity = side === name ? (active ? .98 : .83) : .32;
-      sprite.scale.setScalar(side === name ? (active ? 1.02 : .86) : .72);
+      const active = name === 'left' ? leftActive : rightActive;
+      material.opacity = active ? .98 : hovered === name ? .83 : .32;
+      sprite.scale.setScalar(active ? 1.02 : hovered === name ? .86 : .72);
     }
   }
 
