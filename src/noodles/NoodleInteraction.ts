@@ -39,6 +39,7 @@ export class NoodleInteraction {
     private onPull: () => void,
     private onFoldGesture: () => void,
     private onGripState: (leftActive: boolean, rightActive: boolean, hovered: Side | null) => void,
+    private onDoughGesture?: () => void,
   ) {
     canvas.addEventListener('pointerdown', this.down);
     canvas.addEventListener('pointermove', this.move);
@@ -132,6 +133,9 @@ export class NoodleInteraction {
       this.cast(e);
       if (this.ray.ray.intersectPlane(drag.plane, this.hit)) {
         this.world.moveHandle(drag.side, this.hit.add(drag.offset));
+        // A real pointer gesture offers the best chance of permission to
+        // trigger navigator.vibrate on platforms that support it.
+        this.onDoughGesture?.();
       }
       e.preventDefault();
       return;
