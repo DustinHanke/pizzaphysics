@@ -450,16 +450,24 @@ export class NoodleWorld {
         const overload = T.MathUtils.clamp(
           (requestedSpan / Math.max(.01, currentLength) - .78) / .38, 0, 1,
         );
-        const inputShock = heldOutward ? this.rheology.shockLoad : 0;
-        const danger = Math.max(violentMotion, inputShock * .76) * overload;
-        this.transientLoad = Math.max(this.transientLoad, danger);
+        // Separate warnings from actual damage. The physical handles lag
+        // deliberately: velocity of that catch-up or a long stationary hold
+        // must NEVER keep weakening the dough. Only a fresh, rapid outward
+        // fingertip movement contributes to fracture fatigue.
+        const inputShock = heldOutward ? this.rheology.outwardShockLoad : 0;
+        const danger = inputShock * overload;
+        this.transientLoad = Math.max(this.transientLoad,
+          Math.max(violentMotion * .75, inputShock) * overload);
         for (let i = 4; i < SEGMENTS - 4; i++) {
           const irregularity = Math.sin(i * 1.37 + strandIndex * 2.1) ** 2;
           const meanRest = currentLength / SEGMENTS;
           const thinSection = T.MathUtils.clamp(rest[i] / Math.max(.001, meanRest) - 1, 0, 1.5);
           const susceptibility = .67 + irregularity * .3 + thinSection * .32;
-          strand.damage[i] = Math.max(0, strand.damage[i] - dt * .026)
-            + danger * susceptibility * dt * 2.75;
+          // Significant cumulative fatigue is required to snap gluten.
+          // Gentle pulls and stable holds recover rather than accumulating
+          // microscopic damage every physics tick.
+          strand.damage[i] = Math.max(0, strand.damage[i] - dt * .017)
+            + danger * susceptibility * dt * 1.05;
           if (strand.damage[i] >= 1) {
             strand.brokenAt = i;
             // Separate the disconnected endpoints immediately. Each half
