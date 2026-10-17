@@ -34,18 +34,18 @@ console.log('LAMIAN_FRACTURE_DIAGNOSTIC', JSON.stringify({
 assert(!rough.torn, 'repeated moderate strokes should not instantly destroy fresh dough');
 assert(rough.integrity >= 60, 'moderate pulling must preserve most of the dough strength');
 
-// Seed a localized weakened patch, then yank both hands apart. This tests the
-// complete fracture path without depending on many seconds of accumulated
-// playing time or input-device-specific movement speed.
+// Verify that genuinely compromised dough can still rupture under a
+// *real active outward fingertip yank*. Unheld programmatic target changes
+// must not damage dough simply because its slow physical grips catch up.
 const stressed = new NoodleWorld();
 const weakSpot = 15;
-stressed.strands[0].damage[weakSpot] = .985;
-for (let i = 0; i < 100 && !stressed.torn; i++) {
-  const x = 4.5;
-  stressed.moveHandle('left', new T.Vector3(-x, 2.9, 0));
-  stressed.moveHandle('right', new T.Vector3(x, 2.9, 0));
-  stressed.step(1 / 120);
-}
+stressed.strands[0].damage[weakSpot] = .995;
+stressed.setGripHeld('left', true);
+stressed.setGripHeld('right', true);
+stressed.step(1 / 120);
+stressed.moveHandle('left', new T.Vector3(-6.9, 2.9, 0));
+stressed.moveHandle('right', new T.Vector3(6.9, 2.9, 0));
+for (let i = 0; i < 100 && !stressed.torn; i++) stressed.step(1 / 120);
 assert(stressed.torn, 'rapid tension must sever a locally weakened strand');
 assert(stressed.tear && stressed.tear.segment >= 4 && stressed.tear.segment < 28);
 assert.equal(stressed.integrity, 0);
