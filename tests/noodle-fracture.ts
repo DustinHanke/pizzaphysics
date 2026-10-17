@@ -15,6 +15,23 @@ for (let i = 0; i < 480; i++) {
 assert.equal(healthy.torn, false, 'slow hand pulling must not snap fresh dough');
 assert(healthy.integrity > 50, 'slow, deliberate pulling must preserve dough strength');
 
+// Repeat abrupt pulls on a fresh rope without manually setting damage.
+// This provides a repeatable gameplay threshold diagnostic.
+const rough = new NoodleWorld();
+for (let cycle = 0; cycle < 6 && !rough.torn; cycle++) {
+  const x = cycle % 2 === 0 ? 4.5 : 1.25;
+  for (let i = 0; i < 80 && !rough.torn; i++) {
+    rough.moveHandle('left', new T.Vector3(-x, 2.95, 0));
+    rough.moveHandle('right', new T.Vector3(x, 2.95, 0));
+    rough.step(1 / 120);
+  }
+}
+console.log('LAMIAN_FRACTURE_DIAGNOSTIC', JSON.stringify({
+  repeatedYankTore: rough.torn,
+  integrity: rough.integrity,
+  totalLength: Number(rough.totalLength.toFixed(2)),
+}));
+
 // Seed a localized weakened patch, then yank both hands apart. This tests the
 // complete fracture path without depending on many seconds of accumulated
 // playing time or input-device-specific movement speed.
