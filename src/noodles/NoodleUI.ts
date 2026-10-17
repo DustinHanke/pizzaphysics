@@ -33,12 +33,14 @@ export function mountNoodleUI(settings: NoodleSettings) {
       </dl>
       <div class="integrity"><div><span>Pull tension</span><span id="tension">0%</span></div><div class="track"><i id="tension-bar"></i></div></div>
       <div class="integrity noodle-uniformity"><div><span>Pull quality</span><span id="uniformity">100%</span></div><div class="track"><i id="uniformity-bar"></i></div></div>
+      <div class="integrity noodle-strength"><div><span>Dough strength</span><span id="strength">100%</span></div><div class="track"><i id="strength-bar"></i></div></div>
       <p id="status" role="status">GENTLY PULL BOTH HANDS APART</p>
       <p class="batch-goal">THE NOODLE STUDY <span>→ 16 STRANDS · UNDER 10 MM · 65% UNIFORMITY</span></p>
       <div class="noodle-success" id="success" hidden><span>THE STUDY IS COMPLETE</span><strong>Sixteen strands. One piece of dough.</strong><p>A balanced hand-pulled batch — ready to cook. Start again and aim for an even smoother pull.</p></div>
+      <div class="noodle-tear" id="tear-notice" hidden><span>THE DOUGH SNAPPED</span><strong>Too much tension, too quickly.</strong><p>The broken ends now move independently. Choose <b>Fresh start</b> to try a gentler, more even pull.</p></div>
     </section>
     <aside class="controls">
-      <div class="controls-intro"><span class="small-label">A STUDY IN HAND-PULLED DOUGH</span><h2>The perfect<br><em>pull.</em></h2><p>Pull with both hands and keep the thickness even. Excess tension creates weak spots; fold when the dough is ready. Reach 16 strands with consistent texture to finish the study.</p></div>
+      <div class="controls-intro"><span class="small-label">A STUDY IN HAND-PULLED DOUGH</span><h2>The perfect<br><em>pull.</em></h2><p>Pull with both hands and keep the thickness even. A sudden, forceful yank can tear the gluten network. Watch the dough strength, then fold when the dough is ready. Reach 16 strands with consistent texture to finish the study.</p></div>
       <button class="controls-toggle" aria-expanded="true" aria-controls="control-body"><span>Adjust the feel</span><span class="toggle-symbol">−</span></button>
       <div id="control-body"></div>
       <p class="specimen-note">Feel the dough yield.<br><span>01 Pull evenly · 02 Swing gently · 03 Fold · 04 Refine</span></p>
