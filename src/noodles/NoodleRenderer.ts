@@ -2,6 +2,7 @@ import * as T from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import type { NoodleWorld } from './NoodleWorld';
 import { NoodleLoops } from './NoodleLoops';
+import { createRawDoughMaterial } from './DoughMaterial';
 
 const RADIAL = 16;
 const SEGMENTS = 32;
@@ -20,29 +21,6 @@ const smoothstep = (a: number, b: number, t: number) => {
   return u * u * (3 - 2 * u);
 };
 
-/** A deterministic fine-grained procedural dough texture; no network request. */
-function createDoughTexture() {
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = 256;
-  const ctx = canvas.getContext('2d')!;
-  const image = ctx.createImageData(256, 256);
-  for (let y = 0; y < 256; y++) for (let x = 0; x < 256; x++) {
-    const i = (y * 256 + x) * 4;
-    const noise = grain(x * 0.51 + y * 6.17);
-    const coarser = grain(Math.floor(x / 13) + Math.floor(y / 13) * 91);
-    const shade = Math.round(220 + noise * 22 + coarser * 11);
-    image.data[i] = shade;
-    image.data[i + 1] = Math.min(255, shade + 2);
-    image.data[i + 2] = Math.min(255, shade + 5);
-    image.data[i + 3] = 255;
-  }
-  ctx.putImageData(image, 0, 0);
-  const tex = new T.CanvasTexture(canvas);
-  tex.wrapS = tex.wrapT = T.RepeatWrapping;
-  tex.colorSpace = T.SRGBColorSpace;
-  tex.anisotropy = 4;
-  return tex;
-}
 function createWorkbenchTexture() {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
@@ -82,6 +60,22 @@ function createFlourTexture() {
   }
   return new T.CanvasTexture(canvas);
 }
+function createGripTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+  ctx.strokeStyle = 'rgba(255,244,217,.9)';
+  ctx.lineWidth = 1.8;
+  ctx.beginPath(); ctx.arc(64, 64, 36, 0, Math.PI * 2); ctx.stroke();
+  for (let i = 0; i < 4; i++) {
+    const a = i * Math.PI / 2;
+    ctx.beginPath();
+    ctx.moveTo(64 + Math.cos(a) * 43, 64 + Math.sin(a) * 43);
+    ctx.lineTo(64 + Math.cos(a) * 49, 64 + Math.sin(a) * 49);
+    ctx.stroke();
+  }
+  return new T.CanvasTexture(canvas);
+}
 function createTubeGeometry() {
   const geometry = new T.BufferGeometry();
   const count = (SEGMENTS + 1) * RADIAL;
@@ -118,12 +112,9 @@ function createTubeGeometry() {
 export class NoodleRenderer {
   private meshes: T.Mesh[] = [];
   private loops: NoodleLoops;
-  private doughTexture = createDoughTexture();
-  private dough = new T.MeshPhysicalMaterial({
-    color: '#f6d7a3', map: this.doughTexture, roughness: .89, metalness: 0,
-    clearcoat: .03, clearcoatRoughness: .8, vertexColors: true,
-    side: T.DoubleSide
-  });
+  // A single shared material is reused by all strands, folds and cuttings.
+  private dough = createRawDoughMaterial();
+  private gripMarks: { left: T.Sprite; right: T.Sprite };
   readonly grips: { left: T.Mesh; right: T.Mesh };
   private flourTexture = createFlourTexture();
   constructor(private scene: T.Scene) {
@@ -144,7 +135,7 @@ export class NoodleRenderer {
     // A small piece of extra dough establishes material scale without distracting from the pull.
     const scraps = new T.Mesh(
       new T.SphereGeometry(.36, 20, 14),
-      new T.MeshStandardMaterial({ color: '#e9c997', map: this.doughTexture, roughness: .88 })
+      new T.MeshStandardMaterial({ color: '#e5d1ab', map: this.dough.map, roughness: .93 })
     );
     scraps.scale.set(2.35, .32, .73);
     scraps.position.set(-3.25, .43, -1.75);
@@ -162,6 +153,26 @@ export class NoodleRenderer {
       return proxy;
     };
     this.grips = { left: createProxy('left'), right: createProxy('right') };
+    const marker = createGripTexture();
+    const hint = () => {
+      const sprite = new T.Sprite(new T.SpriteMaterial({
+        map: marker, transparent: true, opacity: .47, depthTest: false, depthWrite: false,
+      }));
+      sprite.scale.set(.72, .72, 1);
+      sprite.renderOrder = 5;
+      scene.add(sprite);
+      return sprite;
+    };
+    this.gripMarks = { left: hint(), right: hint() };
+  }
+
+  setGripHover(side: 'left' | 'right' | null, active = false) {
+    for (const name of ['left', 'right'] as const) {
+      const sprite = this.gripMarks[name];
+      const material = sprite.material as T.SpriteMaterial;
+      material.opacity = side === name ? (active ? .98 : .83) : .32;
+      sprite.scale.setScalar(side === name ? (active ? 1.02 : .86) : .72);
+    }
   }
 
   private resizeStrands(count: number) {
@@ -185,6 +196,8 @@ export class NoodleRenderer {
     this.grips.left.position.copy(oldPoint);
     world.getRenderHandle('right', oldPoint);
     this.grips.right.position.copy(oldPoint);
+    this.gripMarks.left.position.copy(this.grips.left.position);
+    this.gripMarks.right.position.copy(this.grips.right.position);
     this.loops.update(world);
     for (let strandIndex = 0; strandIndex < world.strands.length; strandIndex++) {
       const geometry = this.meshes[strandIndex].geometry;
@@ -212,7 +225,8 @@ export class NoodleRenderer {
         const slowWaves = .095 * Math.sin(t * 7.7 + strandIndex * .62)
           + .066 * Math.sin(t * 18.9 + 1.1 + strandIndex * .19)
           + .033 * Math.sin(t * 41.3 + 2.6);
-        const radius = world.radius * 1.34 * (1 + shoulder + slowWaves) * rolledEnd;
+        const localRadius = world.getLocalRadius(strandIndex, t);
+        const radius = localRadius * 1.26 * (1 + shoulder + slowWaves) * rolledEnd;
         const flatten = .86 + .14 * smoothstep(0, .13, distToTip);
         // Approximate the meridian slope for round rather than flat end shading.
         const tipSlope = distToTip < .11 ? .63 * (1 - smoothstep(0, .11, distToTip)) * (t < .5 ? -1 : 1) : 0;
@@ -221,8 +235,9 @@ export class NoodleRenderer {
           const c = Math.cos(angle), s = Math.sin(angle);
           const grainValue = grain(i * 13.17 + j * 1.339 + strandIndex * 71.1);
           const longitudinal = Math.sin(t * 32 + strandIndex * 3.1 + Math.sin(angle) * 2);
-          const relief = 1 + .036 * longitudinal + .018 * (grainValue - .5)
-            + .016 * Math.sin(angle * 4 + t * 73 + strandIndex);
+          // Striations follow the gluten and shallow flour-coated folds.
+          const relief = 1 + .018 * longitudinal + .012 * (grainValue - .5)
+            + .008 * Math.sin(angle * 4 + t * 73 + strandIndex);
           const r = radius * relief;
           const index = (i * RADIAL + j) * 3;
           const nx = normal.x * c + binormal.x * s * flatten;
@@ -236,9 +251,11 @@ export class NoodleRenderer {
           normals[index + 1] = ny / nlen + tangent.y * tipSlope;
           normals[index + 2] = nz / nlen + tangent.z * tipSlope;
           // Broad, soft flour bloom and dough creases, not random black speckles.
-          const flour = .075 * Math.pow(Math.max(0, Math.sin(t * 24.1 + Math.sin(angle * 2.5) * 1.2)), 7);
-          const warmth = .92 + grainValue * .085 + flour - shoulder * .045
-            + .022 * Math.sin(angle * 3 + i * .43);
+          const flour = .026 * Math.pow(Math.max(0, Math.sin(t * 21.1 + Math.sin(angle * 2.5) * 1.2)), 6);
+          const thickness = localRadius / Math.max(.01, world.radius);
+          const stretchShade = T.MathUtils.clamp((1 - thickness) * .13, -.025, .05);
+          const warmth = .975 + grainValue * .026 + flour - shoulder * .018
+            + .01 * Math.sin(angle * 3 + i * .43) - stretchShade;
           colors[index] = warmth;
           colors[index + 1] = warmth * .988;
           colors[index + 2] = warmth * .953;
