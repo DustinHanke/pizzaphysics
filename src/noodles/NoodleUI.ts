@@ -12,6 +12,8 @@ export function mountNoodleUI(settings: NoodleSettings) {
     <section class="stage" aria-label="Hand-pulled noodle interaction">
       <div class="stage-caption"><span>LĀMIÀN / THE DOUGH STUDY · Nº 02</span><span>From a single pull.</span></div>
       <canvas id="scene" tabindex="0" aria-label="Interactive fresh noodle dough. Use two fingertips simultaneously to stretch both highlighted ends. Drag empty space to orbit, scroll to zoom. Press S to swing, F to fold and R to reset."></canvas>
+      <div id="stress-vignette" class="stress-vignette" aria-hidden="true"></div>
+      <div id="stress-callout" class="stress-callout" role="status" aria-live="polite" hidden><span id="stress-callout-title">SLOW DOWN</span><small id="stress-callout-description">Ease the tension to protect the dough.</small></div>
       <div class="pull-hint" id="hint"><span class="hint-mark" aria-hidden="true">↔</span><span>Use two fingers to pull both ends apart.</span></div>
     </section>
     <div class="stage-actions">
@@ -34,6 +36,7 @@ export function mountNoodleUI(settings: NoodleSettings) {
       <div class="integrity"><div><span>Pull tension</span><span id="tension">0%</span></div><div class="track"><i id="tension-bar"></i></div></div>
       <div class="integrity noodle-uniformity"><div><span>Pull quality</span><span id="uniformity">100%</span></div><div class="track"><i id="uniformity-bar"></i></div></div>
       <div class="integrity noodle-strength"><div><span>Dough strength</span><span id="strength">100%</span></div><div class="track"><i id="strength-bar"></i></div></div>
+      <label class="noodle-haptics-setting" id="haptics-setting" hidden><input type="checkbox" id="haptics-enabled" checked> Vibrate when dough is under strain <span>(supported devices)</span></label>
       <p id="status" role="status">GENTLY PULL BOTH HANDS APART</p>
       <p class="batch-goal">THE NOODLE STUDY <span>→ 16 STRANDS · UNDER 10 MM · 65% UNIFORMITY</span></p>
       <div class="noodle-success" id="success" hidden><span>THE STUDY IS COMPLETE</span><strong>Sixteen strands. One piece of dough.</strong><p>A balanced hand-pulled batch — ready to cook. Start again and aim for an even smoother pull.</p></div>
