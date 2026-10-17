@@ -35,6 +35,7 @@ export function mountNoodleUI(settings: NoodleSettings) {
       <div class="integrity noodle-uniformity"><div><span>Pull quality</span><span id="uniformity">100%</span></div><div class="track"><i id="uniformity-bar"></i></div></div>
       <p id="status" role="status">GENTLY PULL BOTH HANDS APART</p>
       <p class="batch-goal">THE NOODLE STUDY <span>→ 16 STRANDS · UNDER 10 MM · 65% UNIFORMITY</span></p>
+      <div class="noodle-success" id="success" hidden><span>THE STUDY IS COMPLETE</span><strong>Sixteen strands. One piece of dough.</strong><p>A balanced hand-pulled batch — ready to cook. Start again and aim for an even smoother pull.</p></div>
     </section>
     <aside class="controls">
       <div class="controls-intro"><span class="small-label">A STUDY IN HAND-PULLED DOUGH</span><h2>The perfect<br><em>pull.</em></h2><p>Pull with both hands and keep the thickness even. Excess tension creates weak spots; fold when the dough is ready. Reach 16 strands with consistent texture to finish the study.</p></div>
