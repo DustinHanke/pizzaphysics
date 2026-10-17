@@ -306,8 +306,8 @@ export class NoodleWorld {
         for (let i = 1; i < SEGMENTS; i++) {
           tmp.copy(points[i - 1]).add(points[i + 1]).multiplyScalar(.5);
           points[i].lerp(tmp, smooth);
-          if (points[i].y < .32 + this.radius) {
-            points[i].y = .32 + this.radius;
+          if (points[i].y < .32 + this.radius * NOMINAL_SURFACE_RADIUS) {
+            points[i].y = .32 + this.radius * NOMINAL_SURFACE_RADIUS;
             // Cancel the normal velocity rather than creating a fake bounce.
             previous[i].y = points[i].y;
             previous[i].x += (points[i].x - previous[i].x) * .14;
@@ -333,7 +333,7 @@ export class NoodleWorld {
     // velocity-consistent projection after all strand contacts.
     for (let k = 0; k < this.strandCount; k++) for (let i = 1; i < SEGMENTS; i++) {
       const strand = this.strands[k];
-      const floor = .32 + this.getLocalRadius(k, i / SEGMENTS);
+      const floor = .32 + this.getLocalRadius(k, i / SEGMENTS) * NOMINAL_SURFACE_RADIUS;
       if (strand.points[i].y < floor) {
         strand.points[i].y = floor;
         strand.previous[i].y = floor;
