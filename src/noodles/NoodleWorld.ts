@@ -28,6 +28,10 @@ const INITIAL_LENGTH = 3.65;
 export const NOODLE_CM_PER_UNIT = 10;
 export const NOMINAL_SURFACE_RADIUS = 1.26;
 const MAX_STRANDS = 16;
+// Nearly every deformation/quality sample lands on one of the 33 mesh rings.
+// Cache its symmetric damage kernel instead of calling exp thousands of
+// times per simulation second at full folded strand count.
+const RING_DAMAGE_WEIGHTS = [0.5, 1.5, 2.5].map(d => Math.exp(-(d * d) / 2.1));
 const tmp = new T.Vector3();
 const delta = new T.Vector3();
 const leftMotion = new T.Vector3(), rightMotion = new T.Vector3();
@@ -97,10 +101,13 @@ export class NoodleWorld {
     const strand = this.strands[strandIndex];
     if (!strand) return 0;
     const center = T.MathUtils.clamp(t, 0, 1) * SEGMENTS;
+    const integerRing = Math.abs(center - Math.round(center)) < 1e-6;
     let weighted = 0;
     for (let i = Math.max(0, Math.floor(center) - 2); i <= Math.min(SEGMENTS - 1, Math.ceil(center) + 2); i++) {
       const distance = Math.abs(i + .5 - center);
-      const weight = Math.exp(-distance * distance / 2.1);
+      const weight = integerRing
+        ? RING_DAMAGE_WEIGHTS[Math.min(2, Math.floor(distance))]
+        : Math.exp(-distance * distance / 2.1);
       weighted = Math.max(weighted, strand.damage[i] * weight);
     }
     return T.MathUtils.clamp(weighted, 0, 1);
