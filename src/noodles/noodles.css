@@ -85,3 +85,18 @@
   .noodle-experiment .telemetry dt { line-height: 1.4; }
   .noodle-experiment .pull-hint { bottom: 22px; padding: 9px 13px; }
 }
+
+/* One gentle first-use cue; the 3D pinch halos remain interactive. */
+.noodle-experiment .pull-hint .hint-mark {
+  display: inline-block;
+  animation: dough-pull-cue 2.4s ease-in-out infinite;
+}
+.noodle-experiment .stage canvas.grabbable { cursor: grab; }
+.noodle-experiment .stage canvas.dragging { cursor: grabbing; }
+@keyframes dough-pull-cue {
+  0%, 100% { transform: translateX(-3px) scaleX(.90); opacity: .74; }
+  50% { transform: translateX(3px) scaleX(1.10); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .noodle-experiment .pull-hint .hint-mark { animation: none; }
+}
