@@ -17,7 +17,7 @@ export function mountNoodleUI(settings: NoodleSettings) {
       <div class="pull-hint" id="hint"><span class="hint-mark" aria-hidden="true">↔</span><span>Pull · Hold to relax · Stretch again</span></div>
     </section>
     <div class="stage-actions">
-      <span class="gesture-note">Two fingers: pull both ends independently · Fold when ready · Scroll to zoom</span>
+      <span class="gesture-note">Two fingers: stretch across the bench · Yank outward to test the breaking point · Scroll to zoom</span>
       <div class="view-actions">
         <button id="camera-reset" title="Reset camera (C)">Reset view</button>
         <button id="snap" title="Snap the dough (S)">Swing <span aria-hidden="true">↝</span></button>
@@ -45,7 +45,7 @@ export function mountNoodleUI(settings: NoodleSettings) {
       <div class="noodle-tear" id="tear-notice" hidden><span>THE DOUGH SNAPPED</span><strong>Too much tension, too quickly.</strong><p>The broken ends now move independently. Choose <b>Fresh start</b> to try a gentler, more even pull.</p></div>
     </section>
     <aside class="controls">
-      <div class="controls-intro"><span class="small-label">A STUDY IN HAND-PULLED DOUGH</span><h2>The perfect<br><em>pull.</em></h2><p>Pull with both hands and feel the dough resist. Your fingertips lead while the dough resists. Pull smoothly, pause under tension to let the gluten relax, then continue. Sudden yanks stiffen and weaken the dough. Reach 16 strands with even thickness.</p></div>
+      <div class="controls-intro"><span class="small-label">A STUDY IN HAND-PULLED DOUGH</span><h2>The perfect<br><em>pull.</em></h2><p>Use both hands across the workbench: pull slowly and let the gluten yield, or yank outward to test its breaking point. The dough follows your fingers with resistance, but a sudden overloaded pull can tear it. Reach 16 strands with even thickness.</p></div>
       <button class="controls-toggle" aria-expanded="true" aria-controls="control-body"><span>Adjust the feel</span><span class="toggle-symbol">−</span></button>
       <div id="control-body"></div>
       <p class="specimen-note">Feel the dough yield.<br><span>01 Pull gently · 02 Hold to soften · 03 Fold · 04 Refine</span></p>
