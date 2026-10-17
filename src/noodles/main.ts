@@ -37,7 +37,7 @@ async function start() {
     const didFold = world.fold();
     if (!didFold) {
       const status = document.querySelector('#status')!;
-      status.textContent = world.strandCount >= 8 ? 'EIGHT STRANDS — MAXIMUM FOR THIS STUDY' : 'PULL LONGER BEFORE FOLDING';
+      status.textContent = world.strandCount >= 16 ? 'SIXTEEN STRANDS — KEEP REFINING YOUR PULL' : 'PULL LONGER BEFORE FOLDING';
     } else {
       noodles.update(world);
       hint.classList.add('hidden');
@@ -56,7 +56,7 @@ async function start() {
     if (e.code === 'KeyC') controller.resetView();
   });
 
-  const fields = Object.fromEntries(['length', 'strands', 'thickness', 'stretch', 'tension', 'tension-bar', 'status', 'fps', 'physics'].map(id => [id, document.getElementById(id)!]));
+  const fields = Object.fromEntries(['length', 'strands', 'thickness', 'stretch', 'tension', 'tension-bar', 'uniformity', 'uniformity-bar', 'status', 'fps', 'physics'].map(id => [id, document.getElementById(id)!]));
   let previous = performance.now(), lastUI = 0, lastShadow = 0, frames = 0, elapsed = 0, smoothedPhysics = 0;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -84,18 +84,27 @@ async function start() {
       fields.thickness.textContent = world.diameterMm.toFixed(1);
       fields.stretch.textContent = String(Math.round(world.drawRatio * 100));
       fields.tension.textContent = `${world.tension}%`;
+      fields.uniformity.textContent = `${world.uniformity}%`;
+      fields['uniformity-bar'].style.width = `${world.uniformity}%`;
+      fields['uniformity-bar'].style.background = world.uniformity < 65 ? '#b94d2c' : '#718766';
       fields['tension-bar'].style.width = `${world.tension}%`;
       fields['tension-bar'].style.background = world.tension > 78 ? '#b94d2c' : '#777e5c';
       document.querySelector('#fold')!.classList.toggle('ready', world.canFold);
       fields.status.textContent = world.folding
-        ? 'FOLDING THE DOUGH — STRANDS DOUBLING'
-        : world.strandCount === 8
-        ? 'EIGHT STRANDS — KEEP PULLING'
-        : world.tension > 78
-          ? 'DOUGH UNDER TENSION — PULL SLOWLY'
-          : world.canFold
-            ? 'READY TO FOLD — DOUBLE YOUR STRANDS'
-            : 'DOUGH READY TO PULL';
+        ? 'FOLDING — KEEP YOUR HANDS STEADY'
+        : world.batchReady
+          ? 'BATCH COMPLETE — SIXTEEN EVENLY PULLED STRANDS'
+          : world.uniformity < 65
+            ? 'UNEVEN DOUGH — SLOW DOWN AND STRETCH GENTLY'
+            : world.minDiameterMm < world.diameterMm * .72
+              ? 'THIN SPOT DETECTED — REDUCE TENSION'
+              : world.tension > 78
+                ? 'HIGH TENSION — PULL MORE SLOWLY'
+                : world.canFold
+                  ? 'READY TO FOLD — DOUBLE YOUR STRANDS'
+                  : world.strandCount === 16
+                    ? 'SIXTEEN STRANDS — EVEN OUT YOUR PULL'
+                    : 'PULL STEADILY TO THIN THE DOUGH';
       fields.fps.textContent = String(Math.round(frames / Math.max(.001, elapsed)));
       fields.physics.textContent = smoothedPhysics.toFixed(1);
       lastUI = now;
