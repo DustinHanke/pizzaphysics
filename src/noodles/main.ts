@@ -24,13 +24,13 @@ async function start() {
   const controller = new NoodleInteraction(canvas, camera, world, noodles.grips,
     () => hint.classList.add('hidden'),
     () => { if (world.fold()) { noodles.update(world); hint.classList.add('hidden'); } },
-    (side, active) => noodles.setGripHover(side, active));
+    (leftActive, rightActive, hovered) => noodles.setGripState(leftActive, rightActive, hovered));
   const reset = () => {
     controller.release();
     world.reset();
     noodles.update(world);
     hint.classList.remove('hidden');
-    noodles.setGripHover(null);
+    noodles.setGripState();
   };
   const fold = () => {
     controller.release();
