@@ -40,6 +40,22 @@ for (let i = 0; i < 90; i++) {
 }
 assert(soft.x < fresh.x - .25, 'rested dough must yield faster under the same tension');
 
+// A sharp yank must initially be harder than the same controlled pull.
+const gentle = new T.Vector3(0, 1.5, 0);
+const shocked = gentle.clone();
+for (let i = 0; i < 40; i++) {
+  advanceResistantGrip(gentle, target, mate, timeStep, 3.3, true, 72, 0, 0);
+  advanceResistantGrip(shocked, target, mate, timeStep, 3.3, true, 72, 0, 1);
+}
+assert(shocked.x > gentle.x + .15, 'fast motion shock must transiently resist extension');
+
+// A taut piece of dough springs back inward more readily than slack dough.
+const taut = new T.Vector3(0, 1.5, 0);
+const slack = taut.clone();
+advanceResistantGrip(taut, new T.Vector3(1, 1.5, 0), new T.Vector3(3, 1.5, 0), timeStep, 3.3, true, 72);
+advanceResistantGrip(slack, new T.Vector3(1, 1.5, 0), new T.Vector3(1.7, 1.5, 0), timeStep, 3.3, true, 72);
+assert(taut.x > slack.x, 'a taut return stroke must spring inward more responsively');
+
 // Integrate with a two-finger XPBD pull and verify one long hold has an actual
 // benefit. The existing fold, tear, and volume tests continue to run.
 const world = new NoodleWorld();
