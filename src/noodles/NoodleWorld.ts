@@ -191,9 +191,9 @@ export class NoodleWorld {
     if (this.folding) return;
     const target = side === 'left' ? this.leftTarget : this.rightTarget;
     target.copy(position);
-    target.x = T.MathUtils.clamp(target.x, -4.5, 4.5);
-    target.y = T.MathUtils.clamp(target.y, .65, 4.9);
-    target.z = T.MathUtils.clamp(target.z, -2.8, 2.8);
+    target.x = T.MathUtils.clamp(target.x, -7.2, 7.2);
+    target.y = T.MathUtils.clamp(target.y, .65, 5.7);
+    target.z = T.MathUtils.clamp(target.z, -4.2, 4.2);
   }
 
   get strandCount() { return this.strands.length; }
@@ -427,8 +427,19 @@ export class NoodleWorld {
         // Sharp pulls can shock partly yielded dough too: after a first
         // extension, span/rest tension alone otherwise approaches zero and
         // repeated yanks never actually break a noodle.
-        const overload = T.MathUtils.clamp((span / Math.max(.01, currentLength) - .77) / .20, 0, 1);
-        const danger = violentMotion * overload;
+        // The physical dough trails behind the fingertips. Only comparing
+        // material span with rest length makes hard *held* pulls impossible
+        // to tear (the resistance cap prevents reaching that strain quickly).
+        // A rapid outward gesture creates load even before the grip catches up.
+        const targetSpan = this.leftTarget.distanceTo(this.rightTarget);
+        const heldOutward = (this.held.left || this.held.right)
+          && targetSpan > span + .22;
+        const requestedSpan = heldOutward ? Math.max(span, targetSpan) : span;
+        const overload = T.MathUtils.clamp(
+          (requestedSpan / Math.max(.01, currentLength) - .78) / .38, 0, 1,
+        );
+        const inputShock = heldOutward ? this.rheology.shockLoad : 0;
+        const danger = Math.max(violentMotion, inputShock * .76) * overload;
         this.transientLoad = Math.max(this.transientLoad, danger);
         for (let i = 4; i < SEGMENTS - 4; i++) {
           const irregularity = Math.sin(i * 1.37 + strandIndex * 2.1) ** 2;
