@@ -42,6 +42,17 @@ advanceResistantGrip(outward, new T.Vector3(-2, 1.5, 0), partner, 1 / 60, 3.3, t
 advanceResistantGrip(inward, new T.Vector3(2, 1.5, 0), partner, 1 / 60, 3.3, true);
 assert(inward.x > -outward.x * 1.2, 'inward motion should be more responsive than pulling outward');
 
+// The exposed slider must have a measurable, deterministic effect.
+const lowResistance = new T.Vector3(0, 1.5, 0);
+const highResistance = lowResistance.clone();
+const sliderTarget = new T.Vector3(-2, 1.5, 0);
+for (let i = 0; i < 60; i++) {
+  advanceResistantGrip(lowResistance, sliderTarget, partner, 1 / 60, 3.3, true, 0);
+  advanceResistantGrip(highResistance, sliderTarget, partner, 1 / 60, 3.3, true, 100);
+}
+assert(lowResistance.x < highResistance.x - .35,
+  'a low resistance setting must visibly yield faster than a high setting');
+
 // Input should remain stable across a 60Hz and 120Hz update cadence.
 const a = new T.Vector3(0, 1.5, 0), b = a.clone(), finger = new T.Vector3(-1.4, 1.5, 0);
 for (let i = 0; i < 60; i++) advanceResistantGrip(a, finger, partner, 1 / 60, 3.3, true);
