@@ -106,6 +106,7 @@ export class NoodleInteraction {
       this.ray.ray.closestPointToPoint(anchor, this.hit);
       this.drags.set(e.pointerId, { side, plane, offset: anchor.clone().sub(this.hit) });
       this.owners.set(side, e.pointerId);
+      this.world.setGripHeld(side, true);
       this.hover = null;
       this.canvas.classList.add('dragging');
       this.canvas.classList.remove('grabbable');
@@ -165,6 +166,7 @@ export class NoodleInteraction {
     if (drag) {
       this.drags.delete(e.pointerId);
       this.owners.delete(drag.side);
+      this.world.setGripHeld(drag.side, false);
       if (this.drags.size === 0) this.canvas.classList.remove('dragging');
       this.emitGripState();
       // Trigger only when the FINAL finger releases, never when one hand
@@ -188,6 +190,8 @@ export class NoodleInteraction {
     const ids = [...this.drags.keys()];
     if (this.orbit) ids.push(this.orbit.id);
     this.drags.clear();
+    this.world.setGripHeld('left', false);
+    this.world.setGripHeld('right', false);
     this.owners.clear();
     this.orbit = null;
     this.keyboard = false;
@@ -209,6 +213,7 @@ export class NoodleInteraction {
     if (e.code === 'Space') {
       e.preventDefault();
       this.keyboard = !this.keyboard;
+      this.world.setGripHeld('right', this.keyboard);
       if (this.keyboard) this.onPull();
     }
     if (!this.keyboard) return;
