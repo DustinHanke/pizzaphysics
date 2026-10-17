@@ -125,6 +125,26 @@ export class NoodleWorld {
   get radius() {
     return .108 * Math.sqrt(INITIAL_LENGTH / Math.max(.01, this.totalLength));
   }
+  /** Local cross-section responds to both accumulated plastic flow and
+   * elastic stretch. The global radius conserves approximate total volume;
+   * this correction distributes that volume along unevenly yielded dough. */
+  getLocalRadius(strandIndex: number, t: number) {
+    const strand = this.strands[strandIndex];
+    if (!strand) return this.radius;
+    const location = T.MathUtils.clamp(t, 0, 1) * SEGMENTS;
+    const i = Math.min(SEGMENTS - 1, Math.floor(location));
+    const before = strand.rest[Math.max(0, i - 1)];
+    const center = strand.rest[i];
+    const after = strand.rest[Math.min(SEGMENTS - 1, i + 1)];
+    const localRest = (before + 2 * center + after) * .25;
+    const averageRest = this.materialLength / SEGMENTS;
+    const p = strand.points[i], q = strand.points[i + 1];
+    const current = p.distanceTo(q);
+    // Blend local strain into the profile without amplifying contact jitter.
+    const elastic = T.MathUtils.clamp(current / Math.max(1e-6, center), .85, 1.38);
+    const relative = T.MathUtils.clamp(averageRest / Math.max(1e-6, localRest), .45, 1.8);
+    return this.radius * T.MathUtils.clamp(Math.sqrt(relative / Math.sqrt(elastic)), .66, 1.28);
+  }
   get diameterMm() { return this.radius / .108 * 9; }
   get tension() {
     const span = this.left.distanceTo(this.right);
