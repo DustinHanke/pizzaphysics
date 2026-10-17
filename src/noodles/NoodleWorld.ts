@@ -452,7 +452,7 @@ export class NoodleWorld {
           const thinSection = T.MathUtils.clamp(rest[i] / Math.max(.001, meanRest) - 1, 0, 1.5);
           const susceptibility = .67 + irregularity * .3 + thinSection * .32;
           strand.damage[i] = Math.max(0, strand.damage[i] - dt * .026)
-            + danger * susceptibility * dt * 9.2;
+            + danger * susceptibility * dt * 2.75;
           if (strand.damage[i] >= 1) {
             strand.brokenAt = i;
             // Separate the disconnected endpoints immediately. Each half
@@ -516,6 +516,9 @@ export class NoodleWorld {
     const gap = Math.max(.055, this.radius * 1.95);
     const gapSq = gap * gap;
     const repel = (a: T.Vector3, b: T.Vector3, pa: T.Vector3, pb: T.Vector3, seed: number) => {
+      // Skip separated particles before vector math; important at 16 strands.
+      if (Math.abs(a.z - b.z) >= gap || Math.abs(a.y - b.y) >= gap ||
+          Math.abs(a.x - b.x) >= gap) return;
       collisionVector.subVectors(b, a);
       const sq = collisionVector.lengthSq();
       if (sq >= gapSq) return;
