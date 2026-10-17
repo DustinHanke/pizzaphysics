@@ -14,7 +14,13 @@ mountNoodleUI(world.settings);
 
 async function start() {
   const canvas = document.querySelector('#scene') as HTMLCanvasElement;
-  const { scene, camera, renderer, resolution, key } = await createScene(canvas);
+  // Higher strand count and a wider bench need a lower pixel/shadow budget
+  // on mobile; the shared Pizza Physics scene keeps its existing defaults.
+  const { scene, camera, renderer, resolution, key } = await createScene(canvas, {
+    mobileMaxPixelRatio: 1.16,
+    mobileMinPixelRatio: .85,
+    mobileShadowMapSize: 768,
+  });
   const noodles = new NoodleRenderer(scene);
   // Do not change the shared Pizza Physics renderer: the larger Noodle
   // workspace needs its own wider key-light shadow frustum.
@@ -126,7 +132,10 @@ async function start() {
     smoothedPhysics = smoothedPhysics * .94 + world.timeMs * .06;
     controller.update(reducedMotion ? Math.max(dt, .1) : dt);
     noodles.update(world);
-    if (!quality.mobile || now - lastShadow >= 1000 / 30) {
+    // Shadow maps are expensive on mobile. The noodle keeps full animation
+    // rate; only its soft workbench shadow updates at a lower cadence.
+    const shadowRate = world.strandCount >= 8 ? 15 : 22;
+    if (!quality.mobile || now - lastShadow >= 1000 / shadowRate) {
       key.shadow.needsUpdate = true;
       lastShadow = now;
     }
