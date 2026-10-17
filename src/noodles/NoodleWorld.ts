@@ -7,6 +7,7 @@ export interface NoodleStrand {
   previous: T.Vector3[];
   rest: Float64Array;
   lambdas: Float64Array;
+  yieldWeights: Float64Array;
 }
 
 export interface NoodleSettings {
@@ -18,6 +19,9 @@ export interface NoodleSettings {
 const SEGMENTS = 32;
 const SOLVER_PASSES = 9;
 const INITIAL_LENGTH = 3.65;
+// World unit = 10 cm; the sculpted tube's nominal center section is 1.26x.
+export const NOODLE_CM_PER_UNIT = 10;
+export const NOMINAL_SURFACE_RADIUS = 1.26;
 const MAX_STRANDS = 8;
 const tmp = new T.Vector3();
 const delta = new T.Vector3();
@@ -88,6 +92,7 @@ export class NoodleWorld {
         points, previous,
         rest: new Float64Array(SEGMENTS).fill(length / SEGMENTS),
         lambdas: new Float64Array(SEGMENTS),
+        yieldWeights: new Float64Array(SEGMENTS),
       };
     });
   }
@@ -115,11 +120,14 @@ export class NoodleWorld {
   }
 
   get strandCount() { return this.strands.length; }
-  get materialLength() {
-    const strand = this.strands[0];
-    return strand ? strand.rest.reduce((sum, value) => sum + value, 0) : 0;
+  /** Average single-strand rest length; unlike the earlier implementation,
+   * totalLength includes local plastic flow on EVERY strand. */
+  get materialLength() { return this.strandCount ? this.totalLength / this.strandCount : 0; }
+  get totalLength() {
+    let length = 0;
+    for (const strand of this.strands) for (let i = 0; i < SEGMENTS; i++) length += strand.rest[i];
+    return length;
   }
-  get totalLength() { return this.materialLength * this.strandCount; }
   get drawRatio() { return this.totalLength / INITIAL_LENGTH; }
   /** Volume conservation is approximate, using the chain's total rest length. */
   get radius() {
@@ -137,7 +145,7 @@ export class NoodleWorld {
     const center = strand.rest[i];
     const after = strand.rest[Math.min(SEGMENTS - 1, i + 1)];
     const localRest = (before + 2 * center + after) * .25;
-    const averageRest = this.materialLength / SEGMENTS;
+    const averageRest = this.totalLength / Math.max(1, this.strandCount * SEGMENTS);
     const p = strand.points[i], q = strand.points[i + 1];
     const current = p.distanceTo(q);
     // Blend local strain into the profile without amplifying contact jitter.
@@ -145,7 +153,23 @@ export class NoodleWorld {
     const relative = T.MathUtils.clamp(averageRest / Math.max(1e-6, localRest), .45, 1.8);
     return this.radius * T.MathUtils.clamp(Math.sqrt(relative / Math.sqrt(elastic)), .66, 1.28);
   }
-  get diameterMm() { return this.radius / .108 * 9; }
+  /** Calibrated to actual mesh units rather than a nominal unrendered diameter. */
+  get diameterMm() { return this.radius * NOMINAL_SURFACE_RADIUS * NOODLE_CM_PER_UNIT * 20; }
+  get minDiameterMm() {
+    let min = Infinity;
+    for (let k = 0; k < this.strandCount; k++) for (let i = 2; i < SEGMENTS - 2; i++)
+      min = Math.min(min, this.getLocalRadius(k, i / SEGMENTS));
+    return Number.isFinite(min) ? min * NOMINAL_SURFACE_RADIUS * NOODLE_CM_PER_UNIT * 20 : this.diameterMm;
+  }
+  get uniformity() {
+    let min = Infinity, max = 0;
+    for (let k = 0; k < this.strandCount; k++) for (let i = 3; i < SEGMENTS - 3; i++) {
+      const r = this.getLocalRadius(k, i / SEGMENTS);
+      min = Math.min(min, r); max = Math.max(max, r);
+    }
+    return max > 0 ? Math.round(T.MathUtils.clamp(min / max, 0, 1) * 100) : 100;
+  }
+  get batchReady() { return !this.folding && this.strandCount >= 8 && this.diameterMm <= 12; }
   get tension() {
     const span = this.left.distanceTo(this.right);
     return Math.round(T.MathUtils.clamp((span / Math.max(.01, this.materialLength) - .76) / .27, 0, 1) * 100);
@@ -218,15 +242,28 @@ export class NoodleWorld {
     const damping = Math.exp(-dt * (.62 + (100 - this.settings.softness) * .010));
     this.contacts = 0;
     const compliance = (.0000008 + this.settings.softness * .00000014) / (dt * dt);
-    for (const strand of this.strands) {
-      const { points, previous, rest, lambdas } = strand;
+    for (let strandIndex = 0; strandIndex < this.strands.length; strandIndex++) {
+      const strand = this.strands[strandIndex];
+      const { points, previous, rest, lambdas, yieldWeights } = strand;
       // If the user pulls the anchors apart, the dough must yield permanently.
       // Bounding this growth per step prevents a single large drag from exploding.
       const currentLength = rest.reduce((sum, value) => sum + value, 0);
       const desired = span / .975;
       if (desired > currentLength) {
-        const growth = 1 + Math.min(.045, (desired / currentLength - 1) * dt * (3 + this.settings.plasticity * .19));
-        for (let i = 0; i < SEGMENTS; i++) rest[i] *= growth;
+        const growth = Math.min(.035, (desired / currentLength - 1) * dt * (2.1 + this.settings.plasticity * .14));
+        let totalWeight = 0;
+        for (let i = 0; i < SEGMENTS; i++) {
+          // Local tension and small deterministic variations make the yield
+          // propagate along the dough instead of uniformly scaling a rubber tube.
+          const strain = points[i].distanceTo(points[i + 1]) / Math.max(1e-6, rest[i]);
+          const materialVariation = .13 * Math.sin(i * 1.73 + strandIndex * 2.11) ** 2;
+          const weight = .65 + materialVariation + Math.max(0, Math.min(1.3, strain - .85)) * 1.55;
+          yieldWeights[i] = weight;
+          totalWeight += weight;
+        }
+        const mean = totalWeight / SEGMENTS;
+        for (let i = 0; i < SEGMENTS; i++)
+          rest[i] *= 1 + growth * T.MathUtils.clamp(yieldWeights[i] / mean, .68, 1.48);
       }
       for (let i = 1; i < SEGMENTS; i++) {
         const p = points[i], old = previous[i];
@@ -263,7 +300,10 @@ export class NoodleWorld {
           points[i].lerp(tmp, smooth);
           if (points[i].y < .32 + this.radius) {
             points[i].y = .32 + this.radius;
-            previous[i].y = Math.min(previous[i].y, points[i].y);
+            // Cancel the normal velocity rather than creating a fake bounce.
+            previous[i].y = points[i].y;
+            previous[i].x += (points[i].x - previous[i].x) * .14;
+            previous[i].z += (points[i].z - previous[i].z) * .14;
           }
         }
       }
@@ -281,6 +321,16 @@ export class NoodleWorld {
       previous[SEGMENTS].copy(points[SEGMENTS]);
     }
     this.solveStrandContacts();
+    // Contacts can push material back through the bench. Apply a final,
+    // velocity-consistent projection after all strand contacts.
+    for (let k = 0; k < this.strandCount; k++) for (let i = 1; i < SEGMENTS; i++) {
+      const strand = this.strands[k];
+      const floor = .32 + this.getLocalRadius(k, i / SEGMENTS);
+      if (strand.points[i].y < floor) {
+        strand.points[i].y = floor;
+        strand.previous[i].y = floor;
+      }
+    }
     this.steps++;
   }
 
