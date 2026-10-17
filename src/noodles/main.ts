@@ -56,6 +56,7 @@ async function start() {
     haptics.reset();
     lastStressBand = 'safe';
     stressVignette.style.setProperty('--stress-intensity', '0');
+    lastStressOpacity = 0;
     stressCallout.hidden = true;
     noodles.update(world);
     hint.classList.remove('hidden');
@@ -92,6 +93,7 @@ async function start() {
   const fields = Object.fromEntries(['length', 'strands', 'thickness', 'stretch', 'tension', 'tension-bar', 'resistance', 'resistance-bar', 'relaxation', 'relaxation-bar', 'uniformity', 'uniformity-bar', 'strength', 'strength-bar', 'tear-notice', 'success', 'status', 'fps', 'physics'].map(id => [id, document.getElementById(id)!]));
   let previous = performance.now(), lastUI = 0, lastShadow = 0, frames = 0, elapsed = 0, smoothedPhysics = 0;
   let lastStressBand = 'safe';
+  let lastStressOpacity = 0, lastStressPaint = 0;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   noodles.update(world);
@@ -109,9 +111,18 @@ async function start() {
     const vignetteOpacity = band === 'safe' ? 0 : band === 'caution'
       ? .28 + Math.max(0, risk - .27) * .83
       : band === 'critical' ? .64 + Math.max(0, risk - .7) * 1.05 : .85;
-    stressVignette.dataset.level = band;
-    stressVignette.style.setProperty('--stress-intensity', String(Math.min(1, vignetteOpacity)));
-    if (band !== lastStressBand) {
+    // Repainting a full-screen radial CSS gradient on every 60/120 Hz
+    // frame is expensive on phones. CSS eases each visual update; cap
+    // vignette style changes at ~12 Hz, but react to danger immediately.
+    const stressChanged = band !== lastStressBand;
+    if (stressChanged || (now - lastStressPaint >= 80
+        && Math.abs(lastStressOpacity - vignetteOpacity) >= .025)) {
+      stressVignette.dataset.level = band;
+      stressVignette.style.setProperty('--stress-intensity', String(Math.min(1, vignetteOpacity)));
+      lastStressOpacity = vignetteOpacity;
+      lastStressPaint = now;
+    }
+    if (stressChanged) {
       lastStressBand = band;
       stressCallout.hidden = band === 'safe';
       stressCallout.dataset.level = band;
