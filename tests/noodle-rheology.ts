@@ -28,11 +28,12 @@ for (let i = 0; i < 220; i++) model.update(timeStep, l, r, false);
 assert(model.relaxed < .05, 'lifting the fingers resets temporary yield assistance');
 model.reset();
 assert.equal(model.outwardShockLoad, 0);
+assert.equal(model.relaxed, 0);
+assert.equal(model.shockLoad, 0);
 model.update(timeStep, new T.Vector3(-2, 1.7, 0), new T.Vector3(2, 1.7, 0), true);
 model.update(timeStep, new T.Vector3(-1, 1.7, 0), new T.Vector3(1, 1.7, 0), true);
 assert.equal(model.outwardShockLoad, 0, 'rapid INWARD movement must not fatigue the dough');
-assert.equal(model.relaxed, 0);
-assert.equal(model.shockLoad, 0);
+assert(model.shockLoad > 0, 'general movement shock still describes fast inward movement');
 
 // Given equal starting strain and fingertip positions, rested gluten yields
 // farther than freshly stretched gluten. Returning the hand is unaffected.
