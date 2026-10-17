@@ -97,7 +97,8 @@ for (const strand of world.strands) for (let i = 1; i < 32; i++) {
     assert(Math.abs(strand.points[i].y - strand.previous[i].y) < 1e-4,
       'contact should not create artificial normal velocity');
 }
+const stepsBeforeStall = world.steps;
 world.advance(10);
-assert(world.steps <= 6, 'fixed timestep must cap work following a stalled frame');
+assert(world.steps - stepsBeforeStall <= 6, 'fixed timestep must cap work following a stalled frame');
 for (const strand of world.strands) for (const p of strand.points) assert(Number.isFinite(p.lengthSq()));
 console.log('PASS: noodle plasticity, folding, thickness, reset, and bounded fixed-step simulation');
