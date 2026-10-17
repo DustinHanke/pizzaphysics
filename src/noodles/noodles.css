@@ -121,3 +121,25 @@
   .noodle-experiment .noodle-uniformity { margin-top: 11px; }
   .noodle-experiment .batch-goal { font-size: 8px; }
 }
+
+.noodle-experiment .noodle-success {
+  margin-top: 15px;
+  border: 1px solid #b1be9c;
+  background: #edf1e5;
+  color: #344a34;
+  padding: 15px 18px;
+  border-radius: 10px;
+}
+.noodle-experiment .noodle-success[hidden] { display: none; }
+.noodle-experiment .noodle-success > span {
+  display: block;
+  font: 9px var(--mono);
+  letter-spacing: .14em;
+  margin-bottom: 6px;
+}
+.noodle-experiment .noodle-success strong {
+  display: block;
+  font: 23px Georgia, serif;
+  font-weight: normal;
+}
+.noodle-experiment .noodle-success p { margin: 7px 0 0; font-size: 11px; line-height: 1.55; }
