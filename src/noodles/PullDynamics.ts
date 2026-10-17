@@ -5,7 +5,7 @@ import * as T from 'three';
  * multiplying the pointer coordinates, the movement is time-step independent. */
 export function advanceResistantGrip(
   current: T.Vector3, target: T.Vector3, partner: T.Vector3,
-  dt: number, restLength: number, held: boolean, resistance = 72,
+  dt: number, restLength: number, held: boolean, resistance = 72, relaxation = 0,
 ) {
   const startX = current.x, startY = current.y, startZ = current.z;
   if (!held) {
@@ -22,8 +22,11 @@ export function advanceResistantGrip(
   // Opening the dough feels progressively heavier. Returning the hands
   // inward is intentionally faster, so folding remains pleasant on phones.
   const viscosity = 1.9 - T.MathUtils.clamp(resistance, 0, 100) * .012;
-  const speed = outward ? T.MathUtils.lerp(1.95, .70, extension) * viscosity : 3.3;
-  const easing = 1 - Math.exp(-dt * (outward ? 5.4 * viscosity : 12));
+  // Holding tension allows the gluten network to relax. After a patient
+  // pause the same gesture yields faster without an abrupt catch-up jump.
+  const yieldFactor = 1 + T.MathUtils.clamp(relaxation, 0, 1) * 1.05;
+  const speed = outward ? T.MathUtils.lerp(1.95, .70, extension) * viscosity * yieldFactor : 3.3;
+  const easing = 1 - Math.exp(-dt * (outward ? 5.4 * viscosity * yieldFactor : 12));
   const step = Math.min(distance * easing, speed * dt);
   const factor = step / distance;
   current.x += (target.x - current.x) * factor;
