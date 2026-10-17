@@ -323,9 +323,9 @@ export class NoodleWorld {
     const relaxed = this.rheology.relaxed;
     leftMotion.copy(this.left);
     rightMotion.copy(this.right);
-    if (this.held.left) advanceResistantGrip(this.left, this.leftTarget, this.right, dt, this.materialLength, true, this.settings.resistance, relaxed);
+    if (this.held.left) advanceResistantGrip(this.left, this.leftTarget, this.right, dt, this.materialLength, true, this.settings.resistance, relaxed, this.rheology.shockLoad);
     else if (!this.touched.left) this.left.lerp(this.leftTarget, blend);
-    if (this.held.right) advanceResistantGrip(this.right, this.rightTarget, this.left, dt, this.materialLength, true, this.settings.resistance);
+    if (this.held.right) advanceResistantGrip(this.right, this.rightTarget, this.left, dt, this.materialLength, true, this.settings.resistance, relaxed, this.rheology.shockLoad);
     else if (!this.touched.right) this.right.lerp(this.rightTarget, blend);
     leftMotion.subVectors(this.left, leftMotion).clampLength(0, .09);
     rightMotion.subVectors(this.right, rightMotion).clampLength(0, .09);
