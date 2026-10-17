@@ -228,8 +228,12 @@ export class NoodleRenderer {
       const colors = (geometry.getAttribute('color') as T.BufferAttribute).array as Float32Array;
       for (let i = 0; i <= SEGMENTS; i++) {
         // Pull tangent from deformed points, so the cross section follows bending.
-        world.getRenderPoint(strandIndex, Math.min(SEGMENTS, i + 1), tangent);
-        world.getRenderPoint(strandIndex, Math.max(0, i - 1), oldPoint);
+        // At a tear, never estimate the tangent across the missing segment.
+        // Both free ends use a one-sided derivative of their own surviving half.
+        const ahead = brokenAt !== null && i === brokenAt ? i : Math.min(SEGMENTS, i + 1);
+        const behind = brokenAt !== null && i === brokenAt + 1 ? i : Math.max(0, i - 1);
+        world.getRenderPoint(strandIndex, ahead, tangent);
+        world.getRenderPoint(strandIndex, behind, oldPoint);
         tangent.sub(oldPoint);
         if (tangent.lengthSq() < 1e-10) tangent.set(1, 0, 0);
         tangent.normalize();
