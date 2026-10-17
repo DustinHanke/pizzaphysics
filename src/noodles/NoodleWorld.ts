@@ -355,13 +355,18 @@ export class NoodleWorld {
       if (strand.brokenAt === null) {
         // A sudden two-handed yank at high tension degrades the weakest
         // interior section. Slow, controlled pulls continue to flow plastically.
-        const overload = T.MathUtils.clamp((span / Math.max(.01, currentLength) - .90) / .25, 0, 1);
+        // Sharp pulls can shock partly yielded dough too: after a first
+        // extension, span/rest tension alone otherwise approaches zero and
+        // repeated yanks never actually break a noodle.
+        const overload = T.MathUtils.clamp((span / Math.max(.01, currentLength) - .77) / .20, 0, 1);
         const danger = violentMotion * overload;
         for (let i = 4; i < SEGMENTS - 4; i++) {
           const irregularity = Math.sin(i * 1.37 + strandIndex * 2.1) ** 2;
-          const susceptibility = .64 + irregularity * .36;
-          strand.damage[i] = Math.max(0, strand.damage[i] - dt * .045)
-            + danger * susceptibility * dt * 5.2;
+          const meanRest = currentLength / SEGMENTS;
+          const thinSection = T.MathUtils.clamp(rest[i] / Math.max(.001, meanRest) - 1, 0, 1.5);
+          const susceptibility = .67 + irregularity * .3 + thinSection * .32;
+          strand.damage[i] = Math.max(0, strand.damage[i] - dt * .026)
+            + danger * susceptibility * dt * 9.2;
           if (strand.damage[i] >= 1) {
             strand.brokenAt = i;
             // Separate the disconnected endpoints immediately. Each half
