@@ -140,13 +140,13 @@ export class NoodleRenderer {
   constructor(private scene: T.Scene) {
     this.loops = new NoodleLoops(scene, this.dough);
     const surface = new T.Mesh(
-      new RoundedBoxGeometry(9.4, .27, 5.9, 5, .12),
+      new RoundedBoxGeometry(15.6, .27, 9.2, 5, .12),
       new T.MeshStandardMaterial({ map: createWorkbenchTexture(), color: '#a49b8c', roughness: .94 })
     );
     surface.position.set(0, .16, 0);
     surface.receiveShadow = true;
     scene.add(surface);
-    const flour = new T.Mesh(new T.PlaneGeometry(8.8, 5.5),
+    const flour = new T.Mesh(new T.PlaneGeometry(14.8, 8.6),
       new T.MeshBasicMaterial({ map: this.flourTexture, transparent: true, opacity: .83, depthWrite: false }));
     flour.rotation.x = -Math.PI / 2;
     flour.position.set(0, .301, 0);
@@ -158,7 +158,7 @@ export class NoodleRenderer {
       new T.MeshStandardMaterial({ color: '#e5d1ab', map: this.dough.map, roughness: .93 })
     );
     scraps.scale.set(2.35, .32, .73);
-    scraps.position.set(-3.25, .43, -1.75);
+    scraps.position.set(-5.5, .43, -2.6);
     scraps.rotation.y = -.3;
     scraps.castShadow = true;
     scene.add(scraps);
