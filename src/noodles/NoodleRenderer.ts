@@ -103,6 +103,48 @@ export function createTubeIndices(brokenAt: number | null, connectedAtRight = fa
   }
   return indices;
 }
+/** Precompute fixed flour/grain and cross-section trig once per strand,
+ * instead of recomputing dozens of sin/cos/exp operations for every vertex
+ * at every frame. Only physical strain and pose are dynamic. */
+function createStaticDetail(strandIndex: number) {
+  const cos = new Float32Array(RADIAL), sin = new Float32Array(RADIAL);
+  for (let j = 0; j < RADIAL; j++) {
+    const angle = j / RADIAL * Math.PI * 2;
+    cos[j] = Math.cos(angle); sin[j] = Math.sin(angle);
+  }
+  const profile = new Float32Array(SEGMENTS + 1);
+  const flatten = new Float32Array(SEGMENTS + 1);
+  const tipSlope = new Float32Array(SEGMENTS + 1);
+  const relief = new Float32Array((SEGMENTS + 1) * RADIAL);
+  const wrinkle = new Float32Array(relief.length);
+  const warmth = new Float32Array(relief.length);
+  for (let i = 0; i <= SEGMENTS; i++) {
+    const t = i / SEGMENTS, distToTip = Math.min(t, 1 - t);
+    const rolledEnd = .70 + .30 * smoothstep(0, .09, distToTip);
+    const shoulder = .21 * Math.exp(-Math.pow((distToTip - .11) / .075, 2));
+    const slowWaves = .095 * Math.sin(t * 7.7 + strandIndex * .62)
+      + .066 * Math.sin(t * 18.9 + 1.1 + strandIndex * .19)
+      + .033 * Math.sin(t * 41.3 + 2.6);
+    profile[i] = 1.26 * (1 + shoulder + slowWaves) * rolledEnd;
+    flatten[i] = .86 + .14 * smoothstep(0, .13, distToTip);
+    tipSlope[i] = distToTip < .11
+      ? .63 * (1 - smoothstep(0, .11, distToTip)) * (t < .5 ? -1 : 1) : 0;
+    for (let j = 0; j < RADIAL; j++) {
+      const angle = j / RADIAL * Math.PI * 2;
+      const v = i * RADIAL + j;
+      const grainValue = grain(i * 13.17 + j * 1.339 + strandIndex * 71.1);
+      const longitudinal = Math.sin(t * 32 + strandIndex * 3.1 + sin[j] * 2);
+      wrinkle[v] = Math.sin(angle * 2 + t * 59 + strandIndex * .7);
+      relief[v] = 1 + .018 * longitudinal + .012 * (grainValue - .5)
+        + .008 * Math.sin(angle * 4 + t * 73 + strandIndex);
+      const flour = .026 * Math.pow(Math.max(0, Math.sin(t * 21.1 + Math.sin(angle * 2.5) * 1.2)), 6);
+      warmth[v] = .975 + grainValue * .026 + flour - shoulder * .018
+        + .01 * Math.sin(angle * 3 + i * .43);
+    }
+  }
+  return { cos, sin, profile, flatten, tipSlope, relief, wrinkle, warmth };
+}
+
 function createTubeGeometry() {
   const geometry = new T.BufferGeometry();
   const count = (SEGMENTS + 1) * RADIAL;
@@ -225,7 +267,9 @@ export class NoodleRenderer {
       removed.geometry.dispose();
     }
     while (this.meshes.length < count) {
-      const mesh = new T.Mesh(createTubeGeometry(), this.dough);
+      const geometry = createTubeGeometry();
+      geometry.userData.staticDetail = createStaticDetail(this.meshes.length);
+      const mesh = new T.Mesh(geometry, this.dough);
       mesh.castShadow = true;
       mesh.frustumCulled = false;
       this.meshes.push(mesh);
@@ -275,6 +319,12 @@ export class NoodleRenderer {
       const positions = (geometry.getAttribute('position') as T.BufferAttribute).array as Float32Array;
       const normals = (geometry.getAttribute('normal') as T.BufferAttribute).array as Float32Array;
       const colors = (geometry.getAttribute('color') as T.BufferAttribute).array as Float32Array;
+      const detail = geometry.userData.staticDetail as ReturnType<typeof createStaticDetail>;
+      const globalRadius = world.radius;
+      const strand = world.strands[strandIndex];
+      let totalRest = 0;
+      for (let segment = 0; segment < SEGMENTS; segment++) totalRest += strand.rest[segment];
+      const averageRest = totalRest / SEGMENTS;
       for (let i = 0; i <= SEGMENTS; i++) {
         // Pull tangent from deformed points, so the cross section follows bending.
         // At a tear, never estimate the tangent across the missing segment.
@@ -292,51 +342,32 @@ export class NoodleRenderer {
         binormal.crossVectors(tangent, normal).normalize();
         const p = world.getRenderPoint(strandIndex, i, oldPoint);
         const t = i / SEGMENTS;
-        const distToTip = Math.min(t, 1 - t);
-        // Sculpted tip profile: a rounded narrow end, shoulders of thicker dough,
-        // then visibly uneven material across the rest of the strand.
-        const rolledEnd = .70 + .30 * smoothstep(0, .09, distToTip);
-        const shoulder = .21 * Math.exp(-Math.pow((distToTip - .11) / .075, 2));
-        const slowWaves = .095 * Math.sin(t * 7.7 + strandIndex * .62)
-          + .066 * Math.sin(t * 18.9 + 1.1 + strandIndex * .19)
-          + .033 * Math.sin(t * 41.3 + 2.6);
         const localDamage = world.getLocalDamage(strandIndex, t);
-        const localRadius = world.getLocalRadius(strandIndex, t);
-        const radius = localRadius * 1.26 * (1 + shoulder + slowWaves) * rolledEnd;
-        // An overstretched gluten neck is asymmetric and less cylindrical.
-        // It visibly pinches before the constraint breaks.
-        const flatten = (.86 + .14 * smoothstep(0, .13, distToTip)) * (1 - localDamage * .23);
-        // Approximate the meridian slope for round rather than flat end shading.
-        const tipSlope = distToTip < .11 ? .63 * (1 - smoothstep(0, .11, distToTip)) * (t < .5 ? -1 : 1) : 0;
+        const localRadius = world.getLocalRadius(strandIndex, t, globalRadius, averageRest, localDamage);
+        const radius = localRadius * detail.profile[i];
+        const flatten = detail.flatten[i] * (1 - localDamage * .23);
+        const tipSlope = detail.tipSlope[i];
+        const thickness = localRadius / Math.max(.01, globalRadius);
+        const stretchShade = T.MathUtils.clamp((1 - thickness) * .13, -.025, .05);
         for (let j = 0; j < RADIAL; j++) {
-          const angle = j / RADIAL * Math.PI * 2;
-          const c = Math.cos(angle), s = Math.sin(angle);
-          const grainValue = grain(i * 13.17 + j * 1.339 + strandIndex * 71.1);
-          const longitudinal = Math.sin(t * 32 + strandIndex * 3.1 + Math.sin(angle) * 2);
-          // Striations follow the gluten and shallow flour-coated folds.
-          const wrinkle = Math.sin(angle * 2 + t * 59 + strandIndex * .7);
-          const relief = 1 + .018 * longitudinal + .012 * (grainValue - .5)
-            + .008 * Math.sin(angle * 4 + t * 73 + strandIndex)
-            + localDamage * .065 * wrinkle;
-          const r = radius * relief;
-          const index = (i * RADIAL + j) * 3;
+          const c = detail.cos[j], s = detail.sin[j];
+          const vertex = i * RADIAL + j;
+          const r = radius * (detail.relief[vertex] + localDamage * .065 * detail.wrinkle[vertex]);
+          const index = vertex * 3;
           const nx = normal.x * c + binormal.x * s * flatten;
           const ny = normal.y * c + binormal.y * s * flatten;
           const nz = normal.z * c + binormal.z * s * flatten;
           positions[index] = p.x + r * nx;
           positions[index + 1] = p.y + r * ny;
           positions[index + 2] = p.z + r * nz;
-          const nlen = Math.hypot(nx, ny, nz) || 1;
+          // The tangent frame is orthonormal: avoid a 3-component hypot
+          // for each vertex, while retaining the flattened cross section.
+          const nlen = Math.sqrt(c * c + s * s * flatten * flatten) || 1;
           normals[index] = nx / nlen + tangent.x * tipSlope;
           normals[index + 1] = ny / nlen + tangent.y * tipSlope;
           normals[index + 2] = nz / nlen + tangent.z * tipSlope;
-          // Broad, soft flour bloom and dough creases, not random black speckles.
-          const flour = .026 * Math.pow(Math.max(0, Math.sin(t * 21.1 + Math.sin(angle * 2.5) * 1.2)), 6);
-          const thickness = localRadius / Math.max(.01, world.radius);
-          const stretchShade = T.MathUtils.clamp((1 - thickness) * .13, -.025, .05);
-          const warmth = .975 + grainValue * .026 + flour - shoulder * .018
-            + .01 * Math.sin(angle * 3 + i * .43) - stretchShade
-            - localDamage * .035;
+          // Flour/grain lives in static buffers; only strain shade changes.
+          const warmth = detail.warmth[vertex] - stretchShade - localDamage * .035;
           colors[index] = warmth;
           colors[index + 1] = warmth * .988;
           colors[index + 2] = warmth * .953;
