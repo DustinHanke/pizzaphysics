@@ -16,6 +16,7 @@ export class NoodleInteraction {
   private hit = new T.Vector3();
   private view = new T.Vector3();
   private cameraOffset = new T.Vector3();
+  private desiredCameraPosition = new T.Vector3();
   private readonly drags = new Map<number, Drag>();
   private readonly owners = new Map<Side, number>();
   private orbit: { id: number; x: number; y: number } | null = null;
@@ -227,11 +228,14 @@ export class NoodleInteraction {
     this.distance = T.MathUtils.lerp(this.distance, this.desiredDistance, blend);
     const span = this.world.left.distanceTo(this.world.right);
     const follow = .5 * (this.world.left.y + this.world.right.y);
-    this.target.y = T.MathUtils.lerp(this.target.y, T.MathUtils.clamp(follow - .34, 1.13, 2.4), blend * .25);
+    this.target.y = T.MathUtils.lerp(this.target.y, T.MathUtils.clamp(follow - .34, 1.13, 2.4), blend * (this.drags.size ? .10 : .25));
     const fitDistance = span * 1.20 / (2 * Math.tan(35 * Math.PI / 360) * Math.max(.56, this.camera.aspect));
     const framing = Math.max(0, (span - 5.2) * .48);
     this.cameraOffset.setFromSphericalCoords(Math.max(this.distance + framing, fitDistance), this.orbitPitch, this.orbitYaw);
-    this.camera.position.copy(this.target).add(this.cameraOffset);
+    this.desiredCameraPosition.copy(this.target).add(this.cameraOffset);
+    // Avoid chasing a moving fingertip by dramatically changing screen-space
+    // projection while it is holding a dough grip.
+    this.camera.position.lerp(this.desiredCameraPosition, this.drags.size > 0 ? .075 : 1);
     this.camera.lookAt(this.target);
     this.camera.updateMatrixWorld();
   }
