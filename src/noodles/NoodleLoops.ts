@@ -4,6 +4,9 @@ import { quality } from '../performance/quality';
 
 const RADIAL = 12;
 const STEPS = 10;
+const RING_COS = Float32Array.from({length:RADIAL}, (_,j)=>Math.cos(j/RADIAL*Math.PI*2));
+const RING_SIN = Float32Array.from({length:RADIAL}, (_,j)=>Math.sin(j/RADIAL*Math.PI*2));
+const U_PROFILE = Float32Array.from({length:STEPS+1},(_,i)=>.90+.33*Math.sin(Math.PI*i/STEPS));
 const START = new T.Vector3();
 const END = new T.Vector3();
 const C1 = new T.Vector3();
@@ -102,14 +105,13 @@ export class NoodleLoops {
         if (normal.lengthSq() < 1e-8) normal.crossVectors(tangent, fallback);
         normal.normalize();
         binormal.crossVectors(tangent, normal).normalize();
+        const radius = endRadius * U_PROFILE[i];
         for (let j = 0; j < RADIAL; j++) {
-          const angle = (j / RADIAL) * Math.PI * 2;
-          const x = Math.cos(angle), y = Math.sin(angle);
+          const x = RING_COS[j], y = RING_SIN[j];
           const nx = normal.x * x + binormal.x * y;
           const ny = normal.y * x + binormal.y * y;
           const nz = normal.z * x + binormal.z * y;
           const n = (i * RADIAL + j) * 3;
-          const radius = endRadius * (.90 + .33 * Math.sin(Math.PI * t));
           positions[n] = P.x + radius * nx;
           positions[n + 1] = P.y + radius * ny;
           positions[n + 2] = P.z + radius * nz;
